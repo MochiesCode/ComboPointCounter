@@ -1,6 +1,3 @@
--- Mostly handwritten as a LUA learning tool
--- By Mochie
-
 -- Only load if player is a rogue
 local _, class = UnitClass("player")
 if class ~= "ROGUE" then return end

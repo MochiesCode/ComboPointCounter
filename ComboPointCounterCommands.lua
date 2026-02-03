@@ -1,3 +1,7 @@
+-- Only load if player is a rogue
+local _, class = UnitClass("player")
+if class ~= "ROGUE" then return end
+
 local addonName, CPC = ...
 
 local function Tokenize(msg)

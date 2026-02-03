@@ -54,7 +54,7 @@ end)
 --========================================================--
 -- Frame Size Controls
 --========================================================--
-local sizeHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightLarge")
+local sizeHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 sizeHeader:SetPoint("TOPLEFT", alwaysShow, "BOTTOMLEFT", 0, -16)
 sizeHeader:SetText("Frame Size")
 
@@ -96,7 +96,7 @@ end)
 --========================================================--
 -- Frame Position Controls
 --========================================================--
-local posHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightLarge")
+local posHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 posHeader:SetPoint("TOPLEFT", resetSize, "BOTTOMLEFT", 0, -22)
 posHeader:SetText("Frame Position")
 
@@ -145,7 +145,7 @@ end)
 --========================================================--
 -- Debug / Force Number Controls
 --========================================================--
-local debugHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightLarge")
+local debugHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 debugHeader:SetPoint("TOPLEFT", applyPos, "BOTTOMLEFT", 0, -22)
 debugHeader:SetText("Digit Adjustment")
 

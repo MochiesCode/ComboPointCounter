@@ -1,4 +1,4 @@
-Displays the number of combo points you have. When in finisher range the background color will change
+Displays the number of combo points you have. When in finisher range the background color will change.
 
 
 Commands:

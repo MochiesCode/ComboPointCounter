@@ -4,7 +4,24 @@ if class ~= "ROGUE" then return end
 
 local addonName, CPC = ...
 
+--========================================================--
+-- Ensure saved variables are initialized
+--========================================================--
+ComboPointCounterDB = ComboPointCounterDB or {}
+ComboPointCounterDB.alwaysShow = ComboPointCounterDB.alwaysShow or false
+ComboPointCounterDB.debugValue = ComboPointCounterDB.debugValue or nil
+ComboPointCounterDB.point = ComboPointCounterDB.point or "CENTER"
+ComboPointCounterDB.x = ComboPointCounterDB.x or 0
+ComboPointCounterDB.y = ComboPointCounterDB.y or 0
+ComboPointCounterDB.size = ComboPointCounterDB.size or 25
+ComboPointCounterDB.textOffsets = ComboPointCounterDB.textOffsets or {}
+for i = 0, 7 do
+    ComboPointCounterDB.textOffsets[i] = ComboPointCounterDB.textOffsets[i] or 0
+end
+
+--========================================================--
 -- Options Panel Registration
+--========================================================--
 local panel = CreateFrame("Frame")
 panel.name = "Combo Point Counter"
 CPC.OptionsPanel = panel
@@ -13,16 +30,20 @@ local category = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
 Settings.RegisterAddOnCategory(category)
 CPC.OptionsCategory = category
 
+--========================================================--
 -- Header Text
+--========================================================--
 local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 title:SetPoint("TOPLEFT", 16, -16)
-title:SetText("Combo Point Counter")
+title:SetText("Combo Point Counter v1.0.2")
 
 local subtitle = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
 subtitle:SetText("Configuration options")
 
+--========================================================--
 -- Visibility Options
+--========================================================--
 local alwaysShow = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
 alwaysShow:SetPoint("TOPLEFT", subtitle, "BOTTOMLEFT", 0, -16)
 alwaysShow.Text:SetText("Always show (out of combat)")
@@ -30,7 +51,9 @@ alwaysShow:SetScript("OnClick", function(self)
     CPC.SetAlwaysShow(self:GetChecked())
 end)
 
+--========================================================--
 -- Frame Size Controls
+--========================================================--
 local sizeHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightLarge")
 sizeHeader:SetPoint("TOPLEFT", alwaysShow, "BOTTOMLEFT", 0, -16)
 sizeHeader:SetText("Frame Size")
@@ -70,7 +93,9 @@ resetSize:SetScript("OnClick", function()
     CPC.SetFrameSize(25)
 end)
 
+--========================================================--
 -- Frame Position Controls
+--========================================================--
 local posHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightLarge")
 posHeader:SetPoint("TOPLEFT", resetSize, "BOTTOMLEFT", 0, -22)
 posHeader:SetText("Frame Position")
@@ -117,7 +142,9 @@ resetPos:SetScript("OnClick", function()
     CPC.SetFramePosition(0, 0)
 end)
 
+--========================================================--
 -- Debug / Force Number Controls
+--========================================================--
 local debugHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightLarge")
 debugHeader:SetPoint("TOPLEFT", applyPos, "BOTTOMLEFT", 0, -22)
 debugHeader:SetText("Digit Adjustment")
@@ -134,9 +161,25 @@ debugBox:SetSize(40, 20)
 debugBox:SetPoint("LEFT", debugCheck, "RIGHT", 6, 1)
 debugBox:SetAutoFocus(false)
 debugBox:SetNumeric(true)
+debugBox:EnableMouseWheel(false)
+
+debugBox:SetScript("OnEditFocusGained", function(self)
+    self:HighlightText()
+end)
+
+local function SetDebugBoxEnabled(enabled)
+    debugBox:SetEnabled(enabled)
+    debugBox:SetAlpha(enabled and 1 or 0.4)
+    if not enabled then
+        debugBox:ClearFocus()
+    end
+end
 
 debugCheck:SetScript("OnClick", function(self)
-    if not self:GetChecked() then
+    local enabled = self:GetChecked()
+    SetDebugBoxEnabled(enabled)
+
+    if not enabled then
         CPC.SetDebugValue(nil)
     else
         debugBox:SetFocus()
@@ -144,11 +187,18 @@ debugCheck:SetScript("OnClick", function(self)
 end)
 
 debugBox:SetScript("OnEnterPressed", function(self)
-    CPC.SetDebugValue(tonumber(self:GetText()))
+    local v = tonumber(self:GetText())
+    if v then
+        v = math.max(0, math.min(7, v))
+        CPC.SetDebugValue(v)
+        self:SetText(v)
+    end
     self:ClearFocus()
 end)
 
--- Number Offset Controls
+--========================================================--
+-- Number Offset Controls (always enabled)
+--========================================================--
 local offsetBoxes = {}
 
 for i = 0, 7 do
@@ -171,7 +221,9 @@ for i = 0, 7 do
     box:SetAutoFocus(false)
 
     box:SetScript("OnEnterPressed", function(self)
-        CPC.SetTextOffset(i, tonumber(self:GetText()) or 0)
+        local v = tonumber(self:GetText()) or 0
+        CPC.SetTextOffset(i, v)
+        self:SetText(v)
         self:ClearFocus()
     end)
 
@@ -179,7 +231,9 @@ for i = 0, 7 do
     offsetBoxes[i] = row
 end
 
+--========================================================--
 -- Unified Refresh
+--========================================================--
 function CPC.RefreshAllOptions()
     alwaysShow:SetChecked(ComboPointCounterDB.alwaysShow)
 
@@ -189,8 +243,10 @@ function CPC.RefreshAllOptions()
     posX:SetText(ComboPointCounterDB.x or 0)
     posY:SetText(ComboPointCounterDB.y or 0)
 
-    debugCheck:SetChecked(ComboPointCounterDB.debugValue ~= nil)
+    local debugEnabled = ComboPointCounterDB.debugValue ~= nil
+    debugCheck:SetChecked(debugEnabled)
     debugBox:SetText(ComboPointCounterDB.debugValue or "")
+    SetDebugBoxEnabled(debugEnabled)
 
     for i = 0, 7 do
         offsetBoxes[i].box:SetText(ComboPointCounterDB.textOffsets[i] or 0)

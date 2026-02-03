@@ -1,11 +1,10 @@
-## Interface: 120000
+## Interface: 120000, 120001
 ## Title: Combo Point Counter
 ## Notes: Displays the number of combo points you have
 ## Author: Mochie
-## Version: 1.0
+## Version: 1.0.2
 ## SavedVariables: ComboPointCounterDB
 ## LoadSavedVariablesFirst: 1
-## OptionalDeps: LibEditMode
 
 ComboPointCounter.lua
 ComboPointCounterOptions.lua

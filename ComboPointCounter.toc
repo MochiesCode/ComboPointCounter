@@ -1,0 +1,12 @@
+## Interface: 120000
+## Title: Combo Point Counter
+## Notes: Displays the number of combo points as a number on screen
+## Author: Mochie
+## Version: 1.0
+## SavedVariables: ComboPointCounterDB
+## LoadSavedVariablesFirst: 1
+## OptionalDeps: LibEditMode
+
+ComboPointCounter.lua
+ComboPointCounterOptions.lua
+ComboPointCounterCommands.lua

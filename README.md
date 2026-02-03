@@ -20,3 +20,5 @@ Commands:
 /cpc debug <#> --Forces a specific number to display (ex: /cpc debug 4)
 
 /cpc debug off --Returns to displaying actual number of combo points
+
+Hold shift and left click to drag move the frame

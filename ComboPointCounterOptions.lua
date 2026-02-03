@@ -197,7 +197,7 @@ debugBox:SetScript("OnEnterPressed", function(self)
 end)
 
 --========================================================--
--- Number Offset Controls (always enabled)
+-- Number Offset Controls
 --========================================================--
 local offsetBoxes = {}
 

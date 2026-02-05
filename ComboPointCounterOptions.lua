@@ -190,7 +190,7 @@ local BORDER_ATLAS_LABELS = {
     ["lemixArtifact-node-circle-glw-FX"] = "Glow 2",
     ["dragonflight-landingbutton-circlehighlight"] = "Container",
     ["services-cover-ring"] = "Ring",
-    ["talents-node-circle-sheenmask"] = "Tintable Ring",
+    ["talents-node-circle-sheenmask"] = "Solid Color",
 }
 
 local BORDER_ATLAS_LOOKUP = {}
@@ -252,7 +252,7 @@ end)
 
 local resetSize = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
 resetSize:SetSize(80, 22)
-resetSize:SetPoint("TOPLEFT", sizeSlider, "BOTTOMLEFT", 0, -10)
+resetSize:SetPoint("LEFT", sizeBox, "RIGHT", 6, 0)
 resetSize:SetText("Reset")
 resetSize:SetScript("OnClick", function()
     CPC.SetFrameSize(25)
@@ -262,7 +262,7 @@ end)
 -- Frame Position Controls
 --========================================================--
 local posHeader = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-posHeader:SetPoint("TOPLEFT", resetSize, "BOTTOMLEFT", 0, -22)
+posHeader:SetPoint("TOPLEFT", sizeSlider, "BOTTOMLEFT", 0, -34)
 posHeader:SetText("Frame Position")
 
 local posXLabel = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
@@ -299,14 +299,15 @@ posX:SetScript("OnEnterPressed", function(self) ApplyPosition(); self:ClearFocus
 posY:SetScript("OnEnterPressed", function(self) ApplyPosition(); self:ClearFocus() end)
 
 local applyPos = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
-applyPos:SetSize(80, 22)
-applyPos:SetPoint("TOPLEFT", posXLabel, "BOTTOMLEFT", 0, -10)
+applyPos:SetHeight(22)
+applyPos:SetPoint("TOPLEFT", posX, "BOTTOMLEFT", 0, -10)
+applyPos:SetPoint("TOPRIGHT", posY, "BOTTOMRIGHT", 0, -10)
 applyPos:SetText("Apply")
 applyPos:SetScript("OnClick", ApplyPosition)
 
 local resetPos = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
 resetPos:SetSize(80, 22)
-resetPos:SetPoint("LEFT", applyPos, "RIGHT", 4, 0)
+resetPos:SetPoint("LEFT", posY, "RIGHT", 6, 0)
 resetPos:SetText("Reset")
 resetPos:SetScript("OnClick", function()
     CPC.SetFramePosition(0, 0)
@@ -367,7 +368,7 @@ local function ShowColorPicker(r, g, b, a, onChange)
 end
 
 local colorsHeader = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-colorsHeader:SetPoint("TOPLEFT", applyPos, "BOTTOMLEFT", 0, -22)
+colorsHeader:SetPoint("TOPLEFT", posHeader, "BOTTOMLEFT", 0, -80)
 colorsHeader:SetText("Style")
 
 local borderAtlasLabel = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
@@ -491,7 +492,7 @@ local function InitializeBorderAtlasDropdown()
     borderAtlasDropdownInitialized = true
 end
 
-defaultColorRow, defaultColorButton = CreateColorRow("Default background", borderAtlasLabel, -18, function()
+defaultColorRow, defaultColorButton = CreateColorRow("Base Background Tint", borderAtlasLabel, -18, function()
     local r, g, b, a = CPC.GetBackgroundColor()
     ShowColorPicker(r, g, b, a, function(nr, ng, nb, na)
         CPC.SetBackgroundColor(nr, ng, nb, na)
@@ -503,7 +504,7 @@ end, function()
     defaultColorButton.swatch:SetColorTexture(c.r, c.g, c.b, c.a)
 end)
 
-finisherColorRow, finisherColorButton = CreateColorRow("Finisher background", defaultColorRow, -6, function()
+finisherColorRow, finisherColorButton = CreateColorRow("Finisher Background Tint", defaultColorRow, -6, function()
     local r, g, b, a = CPC.GetFinisherColor()
     ShowColorPicker(r, g, b, a, function(nr, ng, nb, na)
         CPC.SetFinisherColor(nr, ng, nb, na)
@@ -515,7 +516,7 @@ end, function()
     finisherColorButton.swatch:SetColorTexture(c.r, c.g, c.b, c.a)
 end)
 
-numberColorRow, numberColorButton = CreateColorRow("Number color", finisherColorRow, -6, function()
+numberColorRow, numberColorButton = CreateColorRow("Number Tint", finisherColorRow, -6, function()
     local r, g, b, a = CPC.GetNumberColor()
     ShowColorPicker(r, g, b, a, function(nr, ng, nb, na)
         CPC.SetNumberColor(nr, ng, nb, na)
@@ -527,7 +528,7 @@ end, function()
     numberColorButton.swatch:SetColorTexture(c.r, c.g, c.b, c.a)
 end)
 
-borderTintRow, borderTintButton = CreateColorRow("Border tint", numberColorRow, -6, function()
+borderTintRow, borderTintButton = CreateColorRow("Border Tint", numberColorRow, -6, function()
     local r, g, b, a = CPC.GetBorderTint()
     ShowColorPicker(r, g, b, a, function(nr, ng, nb, na)
         CPC.SetBorderTint(nr, ng, nb, na)

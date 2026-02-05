@@ -28,6 +28,17 @@ ComboPointCounterDB.finisherColor.r = ComboPointCounterDB.finisherColor.r or 0.7
 ComboPointCounterDB.finisherColor.g = ComboPointCounterDB.finisherColor.g or 0.5
 ComboPointCounterDB.finisherColor.b = ComboPointCounterDB.finisherColor.b or 0
 ComboPointCounterDB.finisherColor.a = ComboPointCounterDB.finisherColor.a or 1
+ComboPointCounterDB.numberColor = ComboPointCounterDB.numberColor or {}
+ComboPointCounterDB.numberColor.r = ComboPointCounterDB.numberColor.r or 1
+ComboPointCounterDB.numberColor.g = ComboPointCounterDB.numberColor.g or 0.82
+ComboPointCounterDB.numberColor.b = ComboPointCounterDB.numberColor.b or 0
+ComboPointCounterDB.numberColor.a = ComboPointCounterDB.numberColor.a or 1
+ComboPointCounterDB.borderTint = ComboPointCounterDB.borderTint or {}
+ComboPointCounterDB.borderTint.r = ComboPointCounterDB.borderTint.r or 1
+ComboPointCounterDB.borderTint.g = ComboPointCounterDB.borderTint.g or 1
+ComboPointCounterDB.borderTint.b = ComboPointCounterDB.borderTint.b or 1
+ComboPointCounterDB.borderTint.a = ComboPointCounterDB.borderTint.a or 1
+ComboPointCounterDB.borderAtlas = ComboPointCounterDB.borderAtlas or "ChallengeMode-KeystoneSlotFrameGlow"
 
 --========================================================--
 -- Options Panel Registration
@@ -100,6 +111,47 @@ local function RegisterTabBox(box)
     end)
 end
 
+local function ParseInteger(text)
+    text = tostring(text or "")
+    if text == "" then
+        return nil
+    end
+
+    if not text:match("^%-?%d+$") then
+        return nil
+    end
+
+    return tonumber(text)
+end
+
+local function SanitizeIntegerText(text, allowNegative)
+    text = tostring(text or "")
+    local sign = ""
+    if allowNegative and text:sub(1, 1) == "-" then
+        sign = "-"
+    end
+
+    local digits = text:gsub("%D", "")
+    return sign .. digits
+end
+
+local function SetIntegerInputFilter(box, allowNegative)
+    box:SetNumeric(false)
+    box:SetScript("OnTextChanged", function(self, userInput)
+        if not userInput then
+            return
+        end
+
+        local text = self:GetText() or ""
+        local sanitized = SanitizeIntegerText(text, allowNegative)
+        if sanitized ~= text then
+            local cursor = self:GetCursorPosition()
+            self:SetText(sanitized)
+            self:SetCursorPosition(math.min(cursor, #sanitized))
+        end
+    end)
+end
+
 --========================================================--
 -- Header Text
 --========================================================--
@@ -111,12 +163,54 @@ local subtitle = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmal
 subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
 subtitle:SetText("Configuration options")
 
+local DIGIT_COLUMN_MIN_OFFSET = 240
+
+local function GetDigitColumnOffset()
+    local width = content:GetWidth() or 0
+    if width <= 0 then
+        return DIGIT_COLUMN_MIN_OFFSET
+    end
+
+    local halfWidth = math.floor(width * 0.5)
+    return math.max(DIGIT_COLUMN_MIN_OFFSET, halfWidth)
+end
+
+local BORDER_ATLAS_CHOICES = CPC.BORDER_ATLAS_CHOICES or {
+    "ChallengeMode-KeystoneSlotFrameGlow",
+    "lemixArtifact-node-circle-glw-FX",
+    "ChallengeMode-KeystoneSlotFrame",
+    "dragonflight-landingbutton-circlehighlight",
+    "services-cover-ring",
+    "talents-node-circle-sheenmask",
+}
+
+local BORDER_ATLAS_LABELS = {
+    ["ChallengeMode-KeystoneSlotFrameGlow"] = "Glow 1",
+    ["ChallengeMode-KeystoneSlotFrame"] = "Ornate",
+    ["lemixArtifact-node-circle-glw-FX"] = "Glow 2",
+    ["dragonflight-landingbutton-circlehighlight"] = "Container",
+    ["services-cover-ring"] = "Ring",
+    ["talents-node-circle-sheenmask"] = "Tintable Ring",
+}
+
+local BORDER_ATLAS_LOOKUP = {}
+for _, atlas in ipairs(BORDER_ATLAS_CHOICES) do
+    BORDER_ATLAS_LOOKUP[atlas] = true
+end
+
+local DEFAULT_BORDER_ATLAS = BORDER_ATLAS_CHOICES[1]
+if not BORDER_ATLAS_LOOKUP[ComboPointCounterDB.borderAtlas] then
+    ComboPointCounterDB.borderAtlas = DEFAULT_BORDER_ATLAS
+end
+
 --========================================================--
 -- Visibility Options
 --========================================================--
 local alwaysShow = CreateFrame("CheckButton", nil, content, "InterfaceOptionsCheckButtonTemplate")
-alwaysShow:SetPoint("TOPLEFT", subtitle, "BOTTOMLEFT", 0, -16)
-alwaysShow.Text:SetText("Always show (out of combat)")
+alwaysShow.Text:SetText("Always show")
+alwaysShow.Text:ClearAllPoints()
+alwaysShow.Text:SetPoint("RIGHT", alwaysShow, "LEFT", -4, 1)
+alwaysShow:SetPoint("TOPRIGHT", content, "TOPRIGHT", -16, -16)
 alwaysShow:SetScript("OnClick", function(self)
     CPC.SetAlwaysShow(self:GetChecked())
 end)
@@ -125,7 +219,7 @@ end)
 -- Frame Size Controls
 --========================================================--
 local sizeHeader = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-sizeHeader:SetPoint("TOPLEFT", alwaysShow, "BOTTOMLEFT", 0, -16)
+sizeHeader:SetPoint("TOPLEFT", subtitle, "BOTTOMLEFT", 0, -16)
 sizeHeader:SetText("Frame Size")
 
 local sizeSlider = CreateFrame("Slider", nil, content, "OptionsSliderTemplate")
@@ -141,7 +235,7 @@ local sizeBox = CreateFrame("EditBox", nil, content, "InputBoxTemplate")
 sizeBox:SetSize(50, 20)
 sizeBox:SetPoint("LEFT", sizeSlider, "RIGHT", 12, 0)
 sizeBox:SetAutoFocus(false)
-sizeBox:SetNumeric(true)
+SetIntegerInputFilter(sizeBox, false)
 RegisterTabBox(sizeBox)
 
 sizeSlider:SetScript("OnValueChanged", function(_, value)
@@ -149,7 +243,7 @@ sizeSlider:SetScript("OnValueChanged", function(_, value)
 end)
 
 sizeBox:SetScript("OnEnterPressed", function(self)
-    local v = tonumber(self:GetText())
+    local v = ParseInteger(self:GetText())
     if v then
         CPC.SetFrameSize(math.max(8, math.min(128, v)))
     end
@@ -179,6 +273,7 @@ local posX = CreateFrame("EditBox", nil, content, "InputBoxTemplate")
 posX:SetSize(60, 20)
 posX:SetPoint("LEFT", posXLabel, "RIGHT", 8, 0)
 posX:SetAutoFocus(false)
+SetIntegerInputFilter(posX, true)
 RegisterTabBox(posX)
 
 local posYLabel = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
@@ -189,10 +284,12 @@ local posY = CreateFrame("EditBox", nil, content, "InputBoxTemplate")
 posY:SetSize(60, 20)
 posY:SetPoint("LEFT", posYLabel, "RIGHT", 8, 0)
 posY:SetAutoFocus(false)
+SetIntegerInputFilter(posY, true)
 RegisterTabBox(posY)
 
 local function ApplyPosition()
-    local x, y = tonumber(posX:GetText()), tonumber(posY:GetText())
+    local x = ParseInteger(posX:GetText())
+    local y = ParseInteger(posY:GetText())
     if x and y then
         CPC.SetFramePosition(x, y)
     end
@@ -271,10 +368,25 @@ end
 
 local colorsHeader = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 colorsHeader:SetPoint("TOPLEFT", applyPos, "BOTTOMLEFT", 0, -22)
-colorsHeader:SetText("Colors")
+colorsHeader:SetText("Style")
+
+local borderAtlasLabel = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+borderAtlasLabel:SetPoint("TOPLEFT", colorsHeader, "BOTTOMLEFT", 0, -16)
+borderAtlasLabel:SetText("Border")
+
+local borderAtlasDropdown = CreateFrame("Frame", "ComboPointCounterBorderAtlasDropdown", content, "UIDropDownMenuTemplate")
+borderAtlasDropdown:SetPoint("LEFT", borderAtlasLabel, "RIGHT", 4, -2)
+UIDropDownMenu_SetWidth(borderAtlasDropdown, 170)
+UIDropDownMenu_SetText(borderAtlasDropdown, "")
 
 local DEFAULT_BG_COLOR = { r = 0, g = 0, b = 0, a = 0.6 }
 local DEFAULT_FINISHER_COLOR = { r = 0.75, g = 0.5, b = 0, a = 1 }
+local DEFAULT_NUMBER_COLOR = { r = 1, g = 0.82, b = 0, a = 1 }
+local DEFAULT_BORDER_TINT = { r = 1, g = 1, b = 1, a = 1 }
+local BORDER_TINT_ATLAS = "talents-node-circle-sheenmask"
+local COLOR_ROW_SWATCH_X = 170
+local COLOR_ROW_RESET_X = 200
+local OFFSET_INPUT_X = 70
 
 local function CreateColorRow(labelText, anchor, yOffset, onPick, onReset)
     local row = CreateFrame("Frame", nil, content)
@@ -287,7 +399,7 @@ local function CreateColorRow(labelText, anchor, yOffset, onPick, onReset)
 
     local button = CreateFrame("Button", nil, row)
     button:SetSize(22, 22)
-    button:SetPoint("LEFT", label, "RIGHT", 8, 0)
+    button:SetPoint("LEFT", row, "LEFT", COLOR_ROW_SWATCH_X, 0)
     button:SetHighlightTexture("Interface/Buttons/ButtonHilight-Square")
 
     local swatch = button:CreateTexture(nil, "ARTWORK")
@@ -303,7 +415,7 @@ local function CreateColorRow(labelText, anchor, yOffset, onPick, onReset)
 
     local reset = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
     reset:SetSize(50, 22)
-    reset:SetPoint("LEFT", button, "RIGHT", 8, 0)
+    reset:SetPoint("LEFT", row, "LEFT", COLOR_ROW_RESET_X, 0)
     reset:SetText("Reset")
     reset:SetScript("OnClick", onReset)
 
@@ -312,8 +424,74 @@ end
 
 local defaultColorRow, defaultColorButton
 local finisherColorRow, finisherColorButton
+local numberColorRow, numberColorButton
+local borderTintRow, borderTintButton
+local borderAtlasDropdownInitialized = false
+local UpdateContentHeight
 
-defaultColorRow, defaultColorButton = CreateColorRow("Default background", colorsHeader, -10, function()
+local function GetSelectedBorderAtlas()
+    local selected = ComboPointCounterDB.borderAtlas
+    if CPC.GetBorderAtlas then
+        selected = CPC.GetBorderAtlas()
+    end
+    if not BORDER_ATLAS_LOOKUP[selected] then
+        selected = DEFAULT_BORDER_ATLAS
+    end
+    return selected
+end
+
+local function UpdateBorderAtlasDropdownText()
+    local selected = GetSelectedBorderAtlas()
+    UIDropDownMenu_SetText(borderAtlasDropdown, BORDER_ATLAS_LABELS[selected] or selected)
+end
+
+local function IsBorderTintAtlasSelected()
+    return GetSelectedBorderAtlas() == BORDER_TINT_ATLAS
+end
+
+local function UpdateBorderTintVisibility()
+    if not borderTintRow then
+        return
+    end
+
+    borderTintRow:SetShown(IsBorderTintAtlasSelected())
+    if UpdateContentHeight then
+        UpdateContentHeight()
+    end
+end
+
+local function InitializeBorderAtlasDropdown()
+    if borderAtlasDropdownInitialized then
+        return
+    end
+
+    UIDropDownMenu_Initialize(borderAtlasDropdown, function(_, level)
+        if level ~= 1 then
+            return
+        end
+
+        local selected = GetSelectedBorderAtlas()
+        for _, atlas in ipairs(BORDER_ATLAS_CHOICES) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = BORDER_ATLAS_LABELS[atlas] or atlas
+            info.func = function()
+                if CPC.SetBorderAtlas then
+                    CPC.SetBorderAtlas(atlas)
+                else
+                    ComboPointCounterDB.borderAtlas = atlas
+                end
+                UpdateBorderAtlasDropdownText()
+                UpdateBorderTintVisibility()
+            end
+            info.checked = (atlas == selected)
+            UIDropDownMenu_AddButton(info, level)
+        end
+    end)
+
+    borderAtlasDropdownInitialized = true
+end
+
+defaultColorRow, defaultColorButton = CreateColorRow("Default background", borderAtlasLabel, -18, function()
     local r, g, b, a = CPC.GetBackgroundColor()
     ShowColorPicker(r, g, b, a, function(nr, ng, nb, na)
         CPC.SetBackgroundColor(nr, ng, nb, na)
@@ -337,11 +515,35 @@ end, function()
     finisherColorButton.swatch:SetColorTexture(c.r, c.g, c.b, c.a)
 end)
 
+numberColorRow, numberColorButton = CreateColorRow("Number color", finisherColorRow, -6, function()
+    local r, g, b, a = CPC.GetNumberColor()
+    ShowColorPicker(r, g, b, a, function(nr, ng, nb, na)
+        CPC.SetNumberColor(nr, ng, nb, na)
+        numberColorButton.swatch:SetColorTexture(nr, ng, nb, na)
+    end)
+end, function()
+    local c = DEFAULT_NUMBER_COLOR
+    CPC.SetNumberColor(c.r, c.g, c.b, c.a)
+    numberColorButton.swatch:SetColorTexture(c.r, c.g, c.b, c.a)
+end)
+
+borderTintRow, borderTintButton = CreateColorRow("Border tint", numberColorRow, -6, function()
+    local r, g, b, a = CPC.GetBorderTint()
+    ShowColorPicker(r, g, b, a, function(nr, ng, nb, na)
+        CPC.SetBorderTint(nr, ng, nb, na)
+        borderTintButton.swatch:SetColorTexture(nr, ng, nb, na)
+    end)
+end, function()
+    local c = DEFAULT_BORDER_TINT
+    CPC.SetBorderTint(c.r, c.g, c.b, c.a)
+    borderTintButton.swatch:SetColorTexture(c.r, c.g, c.b, c.a)
+end)
+borderTintRow:Hide()
+
 --========================================================--
 -- Debug / Force Number Controls
 --========================================================--
 local debugHeader = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-debugHeader:SetPoint("TOPLEFT", finisherColorRow, "BOTTOMLEFT", 0, -22)
 debugHeader:SetText("Digit Adjustment")
 
 local debugLabel = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
@@ -355,7 +557,7 @@ local debugBox = CreateFrame("EditBox", nil, content, "InputBoxTemplate")
 debugBox:SetSize(40, 20)
 debugBox:SetPoint("LEFT", debugCheck, "RIGHT", 6, 1)
 debugBox:SetAutoFocus(false)
-debugBox:SetNumeric(true)
+SetIntegerInputFilter(debugBox, false)
 debugBox:EnableMouseWheel(false)
 RegisterTabBox(debugBox)
 
@@ -383,7 +585,7 @@ debugCheck:SetScript("OnClick", function(self)
 end)
 
 debugBox:SetScript("OnEnterPressed", function(self)
-    local v = tonumber(self:GetText())
+    local v = ParseInteger(self:GetText())
     if v then
         v = math.max(0, math.min(7, v))
         CPC.SetDebugValue(v)
@@ -413,12 +615,13 @@ for i = 0, 7 do
 
     local box = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
     box:SetSize(40, 20)
-    box:SetPoint("LEFT", label, "RIGHT", 8, 0)
+    box:SetPoint("LEFT", row, "LEFT", OFFSET_INPUT_X, 0)
     box:SetAutoFocus(false)
+    SetIntegerInputFilter(box, true)
     RegisterTabBox(box)
 
     box:SetScript("OnEnterPressed", function(self)
-        local v = tonumber(self:GetText()) or 0
+        local v = ParseInteger(self:GetText()) or 0
         CPC.SetTextOffset(i, v)
         self:SetText(v)
         self:ClearFocus()
@@ -428,16 +631,36 @@ for i = 0, 7 do
     offsetBoxes[i] = row
 end
 
+local function LayoutDigitAdjustment()
+    local offset = GetDigitColumnOffset()
+
+    debugHeader:ClearAllPoints()
+    debugHeader:SetPoint("TOPLEFT", sizeHeader, "TOPLEFT", offset, 0)
+
+    debugLabel:ClearAllPoints()
+    debugLabel:SetPoint("TOPLEFT", debugHeader, "BOTTOMLEFT", 0, -12)
+end
+
 --========================================================--
 -- Unified Refresh
 --========================================================--
-local function UpdateContentHeight()
-    local last = offsetBoxes[7]
-    if not last then return end
+UpdateContentHeight = function()
+    local lastOffsetRow = offsetBoxes[7]
+    if not lastOffsetRow then return end
 
     local top = content:GetTop()
-    local bottom = last:GetBottom()
-    if not top or not bottom then return end
+    local offsetBottom = lastOffsetRow:GetBottom()
+    local colorBottom = numberColorRow and numberColorRow:GetBottom() or nil
+    local borderTintBottom = (borderTintRow and borderTintRow:IsShown()) and borderTintRow:GetBottom() or nil
+    if not top or not offsetBottom then return end
+
+    local bottom = offsetBottom
+    if colorBottom and colorBottom < bottom then
+        bottom = colorBottom
+    end
+    if borderTintBottom and borderTintBottom < bottom then
+        bottom = borderTintBottom
+    end
 
     local height = top - bottom + 20
     if height < 1 then
@@ -460,6 +683,13 @@ function CPC.RefreshAllOptions()
 
     local fr, fg, fb, fa = CPC.GetFinisherColor()
     finisherColorButton.swatch:SetColorTexture(fr, fg, fb, fa)
+    local nr, ng, nb, na = CPC.GetNumberColor()
+    numberColorButton.swatch:SetColorTexture(nr, ng, nb, na)
+    local tr, tg, tb, ta = CPC.GetBorderTint()
+    borderTintButton.swatch:SetColorTexture(tr, tg, tb, ta)
+    InitializeBorderAtlasDropdown()
+    UpdateBorderAtlasDropdownText()
+    UpdateBorderTintVisibility()
 
     local debugEnabled = ComboPointCounterDB.debugValue ~= nil
     debugCheck:SetChecked(debugEnabled)
@@ -472,8 +702,12 @@ function CPC.RefreshAllOptions()
 end
 
 panel:SetScript("OnShow", function()
+    LayoutDigitAdjustment()
     CPC.RefreshAllOptions()
     UpdateContentHeight()
 end)
 
-scrollFrame:HookScript("OnSizeChanged", UpdateContentHeight)
+scrollFrame:HookScript("OnSizeChanged", function()
+    LayoutDigitAdjustment()
+    UpdateContentHeight()
+end)

@@ -18,6 +18,16 @@ ComboPointCounterDB.textOffsets = ComboPointCounterDB.textOffsets or {}
 for i = 0, 7 do
     ComboPointCounterDB.textOffsets[i] = ComboPointCounterDB.textOffsets[i] or 0
 end
+ComboPointCounterDB.backgroundColor = ComboPointCounterDB.backgroundColor or {}
+ComboPointCounterDB.backgroundColor.r = ComboPointCounterDB.backgroundColor.r or 0
+ComboPointCounterDB.backgroundColor.g = ComboPointCounterDB.backgroundColor.g or 0
+ComboPointCounterDB.backgroundColor.b = ComboPointCounterDB.backgroundColor.b or 0
+ComboPointCounterDB.backgroundColor.a = ComboPointCounterDB.backgroundColor.a or 0.6
+ComboPointCounterDB.finisherColor = ComboPointCounterDB.finisherColor or {}
+ComboPointCounterDB.finisherColor.r = ComboPointCounterDB.finisherColor.r or 0.75
+ComboPointCounterDB.finisherColor.g = ComboPointCounterDB.finisherColor.g or 0.5
+ComboPointCounterDB.finisherColor.b = ComboPointCounterDB.finisherColor.b or 0
+ComboPointCounterDB.finisherColor.a = ComboPointCounterDB.finisherColor.a or 1
 
 --========================================================--
 -- Options Panel Registration
@@ -31,20 +41,80 @@ Settings.RegisterAddOnCategory(category)
 CPC.OptionsCategory = category
 
 --========================================================--
+-- Scroll Frame
+--========================================================--
+local scrollFrame = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
+scrollFrame:SetPoint("TOPLEFT", 0, 0)
+scrollFrame:SetPoint("BOTTOMRIGHT", -28, 0)
+
+local content = CreateFrame("Frame", nil, scrollFrame)
+content:SetPoint("TOPLEFT")
+content:SetSize(1, 1)
+scrollFrame:SetScrollChild(content)
+
+scrollFrame:SetScript("OnSizeChanged", function(self, width)
+    content:SetWidth(width)
+end)
+
+--========================================================--
+-- Tab Navigation
+--========================================================--
+local tabBoxes = {}
+
+local function IsTabTarget(box)
+    return box and box:IsShown() and box:IsEnabled()
+end
+
+local function FocusNextTab(current, reverse)
+    local count = #tabBoxes
+    if count == 0 then return end
+
+    local startIndex = 1
+    for i = 1, count do
+        if tabBoxes[i] == current then
+            startIndex = i
+            break
+        end
+    end
+
+    local step = reverse and -1 or 1
+    local idx = startIndex
+    for _ = 1, count do
+        idx = idx + step
+        if idx < 1 then idx = count end
+        if idx > count then idx = 1 end
+
+        local target = tabBoxes[idx]
+        if IsTabTarget(target) then
+            target:SetFocus()
+            target:HighlightText()
+            return
+        end
+    end
+end
+
+local function RegisterTabBox(box)
+    tabBoxes[#tabBoxes + 1] = box
+    box:SetScript("OnTabPressed", function(self)
+        FocusNextTab(self, IsShiftKeyDown())
+    end)
+end
+
+--========================================================--
 -- Header Text
 --========================================================--
-local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+local title = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 title:SetPoint("TOPLEFT", 16, -16)
-title:SetText("Combo Point Counter v1.0.2")
+title:SetText("Combo Point Counter v1.1")
 
-local subtitle = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+local subtitle = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
 subtitle:SetText("Configuration options")
 
 --========================================================--
 -- Visibility Options
 --========================================================--
-local alwaysShow = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
+local alwaysShow = CreateFrame("CheckButton", nil, content, "InterfaceOptionsCheckButtonTemplate")
 alwaysShow:SetPoint("TOPLEFT", subtitle, "BOTTOMLEFT", 0, -16)
 alwaysShow.Text:SetText("Always show (out of combat)")
 alwaysShow:SetScript("OnClick", function(self)
@@ -54,11 +124,11 @@ end)
 --========================================================--
 -- Frame Size Controls
 --========================================================--
-local sizeHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+local sizeHeader = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 sizeHeader:SetPoint("TOPLEFT", alwaysShow, "BOTTOMLEFT", 0, -16)
 sizeHeader:SetText("Frame Size")
 
-local sizeSlider = CreateFrame("Slider", nil, panel, "OptionsSliderTemplate")
+local sizeSlider = CreateFrame("Slider", nil, content, "OptionsSliderTemplate")
 sizeSlider:SetPoint("TOPLEFT", sizeHeader, "BOTTOMLEFT", 0, -12)
 sizeSlider:SetMinMaxValues(8, 128)
 sizeSlider:SetValueStep(1)
@@ -67,11 +137,12 @@ sizeSlider:SetWidth(105)
 sizeSlider.Low:SetText("8")
 sizeSlider.High:SetText("128")
 
-local sizeBox = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+local sizeBox = CreateFrame("EditBox", nil, content, "InputBoxTemplate")
 sizeBox:SetSize(50, 20)
 sizeBox:SetPoint("LEFT", sizeSlider, "RIGHT", 12, 0)
 sizeBox:SetAutoFocus(false)
 sizeBox:SetNumeric(true)
+RegisterTabBox(sizeBox)
 
 sizeSlider:SetScript("OnValueChanged", function(_, value)
     CPC.SetFrameSize(math.floor(value + 0.5))
@@ -85,7 +156,7 @@ sizeBox:SetScript("OnEnterPressed", function(self)
     self:ClearFocus()
 end)
 
-local resetSize = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+local resetSize = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
 resetSize:SetSize(80, 22)
 resetSize:SetPoint("TOPLEFT", sizeSlider, "BOTTOMLEFT", 0, -10)
 resetSize:SetText("Reset")
@@ -96,27 +167,29 @@ end)
 --========================================================--
 -- Frame Position Controls
 --========================================================--
-local posHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+local posHeader = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 posHeader:SetPoint("TOPLEFT", resetSize, "BOTTOMLEFT", 0, -22)
 posHeader:SetText("Frame Position")
 
-local posXLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+local posXLabel = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
 posXLabel:SetPoint("TOPLEFT", posHeader, "BOTTOMLEFT", 0, -10)
 posXLabel:SetText("X")
 
-local posX = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+local posX = CreateFrame("EditBox", nil, content, "InputBoxTemplate")
 posX:SetSize(60, 20)
 posX:SetPoint("LEFT", posXLabel, "RIGHT", 8, 0)
 posX:SetAutoFocus(false)
+RegisterTabBox(posX)
 
-local posYLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+local posYLabel = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
 posYLabel:SetPoint("LEFT", posX, "RIGHT", 8, 0)
 posYLabel:SetText("Y")
 
-local posY = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+local posY = CreateFrame("EditBox", nil, content, "InputBoxTemplate")
 posY:SetSize(60, 20)
 posY:SetPoint("LEFT", posYLabel, "RIGHT", 8, 0)
 posY:SetAutoFocus(false)
+RegisterTabBox(posY)
 
 local function ApplyPosition()
     local x, y = tonumber(posX:GetText()), tonumber(posY:GetText())
@@ -128,13 +201,13 @@ end
 posX:SetScript("OnEnterPressed", function(self) ApplyPosition(); self:ClearFocus() end)
 posY:SetScript("OnEnterPressed", function(self) ApplyPosition(); self:ClearFocus() end)
 
-local applyPos = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+local applyPos = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
 applyPos:SetSize(80, 22)
 applyPos:SetPoint("TOPLEFT", posXLabel, "BOTTOMLEFT", 0, -10)
 applyPos:SetText("Apply")
 applyPos:SetScript("OnClick", ApplyPosition)
 
-local resetPos = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+local resetPos = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
 resetPos:SetSize(80, 22)
 resetPos:SetPoint("LEFT", applyPos, "RIGHT", 4, 0)
 resetPos:SetText("Reset")
@@ -143,25 +216,148 @@ resetPos:SetScript("OnClick", function()
 end)
 
 --========================================================--
+-- Color Controls
+--========================================================--
+local function ShowColorPicker(r, g, b, a, onChange)
+    a = a or 1
+
+    local function ApplyNew()
+        local nr, ng, nb = ColorPickerFrame:GetColorRGB()
+        local na = ColorPickerFrame:GetColorAlpha() or 1
+        onChange(nr, ng, nb, na)
+    end
+
+    local function ApplyOld()
+        local nr, ng, nb = ColorPickerFrame:GetColorRGB()
+        local opacity = 1
+        if OpacitySliderFrame and OpacitySliderFrame.GetValue then
+            opacity = OpacitySliderFrame:GetValue()
+        elseif ColorPickerFrame.opacity ~= nil then
+            opacity = ColorPickerFrame.opacity
+        end
+        local na = 1 - opacity
+        onChange(nr, ng, nb, na)
+    end
+
+    if ColorPickerFrame.SetupColorPickerAndShow then
+        local pr, pg, pb, pa = r, g, b, a
+        ColorPickerFrame:SetupColorPickerAndShow({
+            r = r,
+            g = g,
+            b = b,
+            opacity = a,
+            hasOpacity = true,
+            swatchFunc = ApplyNew,
+            opacityFunc = ApplyNew,
+            cancelFunc = function()
+                onChange(pr, pg, pb, pa)
+            end,
+        })
+    else
+        ColorPickerFrame.hasOpacity = true
+        ColorPickerFrame.opacity = 1 - a
+        ColorPickerFrame.previousValues = { r = r, g = g, b = b, a = a }
+        ColorPickerFrame.func = ApplyOld
+        ColorPickerFrame.opacityFunc = ApplyOld
+        ColorPickerFrame.cancelFunc = function()
+            local prev = ColorPickerFrame.previousValues
+            onChange(prev.r, prev.g, prev.b, prev.a)
+        end
+        ColorPickerFrame:SetColorRGB(r, g, b)
+        ColorPickerFrame:Hide()
+        ColorPickerFrame:Show()
+    end
+end
+
+local colorsHeader = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+colorsHeader:SetPoint("TOPLEFT", applyPos, "BOTTOMLEFT", 0, -22)
+colorsHeader:SetText("Colors")
+
+local DEFAULT_BG_COLOR = { r = 0, g = 0, b = 0, a = 0.6 }
+local DEFAULT_FINISHER_COLOR = { r = 0.75, g = 0.5, b = 0, a = 1 }
+
+local function CreateColorRow(labelText, anchor, yOffset, onPick, onReset)
+    local row = CreateFrame("Frame", nil, content)
+    row:SetSize(320, 22)
+    row:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, yOffset)
+
+    local label = row:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    label:SetPoint("LEFT")
+    label:SetText(labelText)
+
+    local button = CreateFrame("Button", nil, row)
+    button:SetSize(22, 22)
+    button:SetPoint("LEFT", label, "RIGHT", 8, 0)
+    button:SetHighlightTexture("Interface/Buttons/ButtonHilight-Square")
+
+    local swatch = button:CreateTexture(nil, "ARTWORK")
+    swatch:SetPoint("CENTER")
+    swatch:SetSize(14, 14)
+
+    local border = button:CreateTexture(nil, "BORDER")
+    border:SetAllPoints()
+    border:SetTexture("Interface/Buttons/UI-Quickslot2")
+
+    button.swatch = swatch
+    button:SetScript("OnClick", onPick)
+
+    local reset = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    reset:SetSize(50, 22)
+    reset:SetPoint("LEFT", button, "RIGHT", 8, 0)
+    reset:SetText("Reset")
+    reset:SetScript("OnClick", onReset)
+
+    return row, button, reset
+end
+
+local defaultColorRow, defaultColorButton
+local finisherColorRow, finisherColorButton
+
+defaultColorRow, defaultColorButton = CreateColorRow("Default background", colorsHeader, -10, function()
+    local r, g, b, a = CPC.GetBackgroundColor()
+    ShowColorPicker(r, g, b, a, function(nr, ng, nb, na)
+        CPC.SetBackgroundColor(nr, ng, nb, na)
+        defaultColorButton.swatch:SetColorTexture(nr, ng, nb, na)
+    end)
+end, function()
+    local c = DEFAULT_BG_COLOR
+    CPC.SetBackgroundColor(c.r, c.g, c.b, c.a)
+    defaultColorButton.swatch:SetColorTexture(c.r, c.g, c.b, c.a)
+end)
+
+finisherColorRow, finisherColorButton = CreateColorRow("Finisher background", defaultColorRow, -6, function()
+    local r, g, b, a = CPC.GetFinisherColor()
+    ShowColorPicker(r, g, b, a, function(nr, ng, nb, na)
+        CPC.SetFinisherColor(nr, ng, nb, na)
+        finisherColorButton.swatch:SetColorTexture(nr, ng, nb, na)
+    end)
+end, function()
+    local c = DEFAULT_FINISHER_COLOR
+    CPC.SetFinisherColor(c.r, c.g, c.b, c.a)
+    finisherColorButton.swatch:SetColorTexture(c.r, c.g, c.b, c.a)
+end)
+
+--========================================================--
 -- Debug / Force Number Controls
 --========================================================--
-local debugHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-debugHeader:SetPoint("TOPLEFT", applyPos, "BOTTOMLEFT", 0, -22)
+local debugHeader = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+debugHeader:SetPoint("TOPLEFT", finisherColorRow, "BOTTOMLEFT", 0, -22)
 debugHeader:SetText("Digit Adjustment")
 
-local debugLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+local debugLabel = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
 debugLabel:SetPoint("TOPLEFT", debugHeader, "BOTTOMLEFT", 0, -12)
 debugLabel:SetText("Force Number")
 
-local debugCheck = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
+local debugCheck = CreateFrame("CheckButton", nil, content, "InterfaceOptionsCheckButtonTemplate")
 debugCheck:SetPoint("LEFT", debugLabel, "RIGHT", 6, -1)
 
-local debugBox = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+local debugBox = CreateFrame("EditBox", nil, content, "InputBoxTemplate")
 debugBox:SetSize(40, 20)
 debugBox:SetPoint("LEFT", debugCheck, "RIGHT", 6, 1)
 debugBox:SetAutoFocus(false)
 debugBox:SetNumeric(true)
 debugBox:EnableMouseWheel(false)
+RegisterTabBox(debugBox)
 
 debugBox:SetScript("OnEditFocusGained", function(self)
     self:HighlightText()
@@ -202,7 +398,7 @@ end)
 local offsetBoxes = {}
 
 for i = 0, 7 do
-    local row = CreateFrame("Frame", nil, panel)
+    local row = CreateFrame("Frame", nil, content)
     row:SetSize(200, 20)
 
     if i == 0 then
@@ -219,6 +415,7 @@ for i = 0, 7 do
     box:SetSize(40, 20)
     box:SetPoint("LEFT", label, "RIGHT", 8, 0)
     box:SetAutoFocus(false)
+    RegisterTabBox(box)
 
     box:SetScript("OnEnterPressed", function(self)
         local v = tonumber(self:GetText()) or 0
@@ -234,6 +431,21 @@ end
 --========================================================--
 -- Unified Refresh
 --========================================================--
+local function UpdateContentHeight()
+    local last = offsetBoxes[7]
+    if not last then return end
+
+    local top = content:GetTop()
+    local bottom = last:GetBottom()
+    if not top or not bottom then return end
+
+    local height = top - bottom + 20
+    if height < 1 then
+        height = 1
+    end
+    content:SetHeight(height)
+end
+
 function CPC.RefreshAllOptions()
     alwaysShow:SetChecked(ComboPointCounterDB.alwaysShow)
 
@@ -242,6 +454,12 @@ function CPC.RefreshAllOptions()
 
     posX:SetText(ComboPointCounterDB.x or 0)
     posY:SetText(ComboPointCounterDB.y or 0)
+
+    local br, bg, bb, ba = CPC.GetBackgroundColor()
+    defaultColorButton.swatch:SetColorTexture(br, bg, bb, ba)
+
+    local fr, fg, fb, fa = CPC.GetFinisherColor()
+    finisherColorButton.swatch:SetColorTexture(fr, fg, fb, fa)
 
     local debugEnabled = ComboPointCounterDB.debugValue ~= nil
     debugCheck:SetChecked(debugEnabled)
@@ -253,4 +471,9 @@ function CPC.RefreshAllOptions()
     end
 end
 
-panel:SetScript("OnShow", CPC.RefreshAllOptions)
+panel:SetScript("OnShow", function()
+    CPC.RefreshAllOptions()
+    UpdateContentHeight()
+end)
+
+scrollFrame:HookScript("OnSizeChanged", UpdateContentHeight)

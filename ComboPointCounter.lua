@@ -17,6 +17,16 @@ ComboPointCounterDB.textOffsets = ComboPointCounterDB.textOffsets or {}
 for i = 0, 7 do
     ComboPointCounterDB.textOffsets[i] = ComboPointCounterDB.textOffsets[i] or 0
 end
+ComboPointCounterDB.backgroundColor = ComboPointCounterDB.backgroundColor or {}
+ComboPointCounterDB.backgroundColor.r = ComboPointCounterDB.backgroundColor.r or 0
+ComboPointCounterDB.backgroundColor.g = ComboPointCounterDB.backgroundColor.g or 0
+ComboPointCounterDB.backgroundColor.b = ComboPointCounterDB.backgroundColor.b or 0
+ComboPointCounterDB.backgroundColor.a = ComboPointCounterDB.backgroundColor.a or 0.6
+ComboPointCounterDB.finisherColor = ComboPointCounterDB.finisherColor or {}
+ComboPointCounterDB.finisherColor.r = ComboPointCounterDB.finisherColor.r or 0.75
+ComboPointCounterDB.finisherColor.g = ComboPointCounterDB.finisherColor.g or 0.5
+ComboPointCounterDB.finisherColor.b = ComboPointCounterDB.finisherColor.b or 0
+ComboPointCounterDB.finisherColor.a = ComboPointCounterDB.finisherColor.a or 1
 
 --========================================================--
 -- Options Sync
@@ -89,6 +99,24 @@ text:SetShadowColor(0, 0, 0, 0.8)
 --========================================================--
 -- Core Update Functions
 --========================================================--
+local function ClampChannel(value, fallback)
+    if value == nil then
+        return fallback
+    end
+    value = tonumber(value)
+    if not value then
+        return fallback
+    end
+    if value < 0 then return 0 end
+    if value > 1 then return 1 end
+    return value
+end
+
+local function ApplyFillColor(comboPoint)
+    local color = comboPoint >= 5 and ComboPointCounterDB.finisherColor or ComboPointCounterDB.backgroundColor
+    fill:SetColorTexture(color.r, color.g, color.b, color.a)
+end
+
 local function UpdateCounter()
     C_Timer.After(0, function() -- Delayed by a frame because it doesn't always update offsets correctly if I don't
         local comboPoint = ComboPointCounterDB.debugValue or UnitPower("player", Enum.PowerType.ComboPoints) or 0
@@ -98,11 +126,7 @@ local function UpdateCounter()
         local xOffset = ComboPointCounterDB.textOffsets[comboPoint] or 0
         text:SetPoint("CENTER", frame, "CENTER", xOffset, 0)
 
-        if comboPoint >= 5 then
-            fill:SetColorTexture(0.75, 0.5, 0, 1)
-        else
-            fill:SetColorTexture(0, 0, 0, 0.6)
-        end
+        ApplyFillColor(comboPoint)
     end)
 end
 CPC.UpdateCounter = UpdateCounter
@@ -170,6 +194,36 @@ function CPC.SetTextOffset(index, value)
     ComboPointCounterDB.textOffsets[index] = value or 0
     UpdateCounter()
     CPC.NotifyOptions()
+end
+
+function CPC.SetBackgroundColor(r, g, b, a)
+    local c = ComboPointCounterDB.backgroundColor
+    c.r = ClampChannel(r, c.r)
+    c.g = ClampChannel(g, c.g)
+    c.b = ClampChannel(b, c.b)
+    c.a = ClampChannel(a, c.a)
+    UpdateCounter()
+    CPC.NotifyOptions()
+end
+
+function CPC.GetBackgroundColor()
+    local c = ComboPointCounterDB.backgroundColor
+    return c.r, c.g, c.b, c.a
+end
+
+function CPC.SetFinisherColor(r, g, b, a)
+    local c = ComboPointCounterDB.finisherColor
+    c.r = ClampChannel(r, c.r)
+    c.g = ClampChannel(g, c.g)
+    c.b = ClampChannel(b, c.b)
+    c.a = ClampChannel(a, c.a)
+    UpdateCounter()
+    CPC.NotifyOptions()
+end
+
+function CPC.GetFinisherColor()
+    local c = ComboPointCounterDB.finisherColor
+    return c.r, c.g, c.b, c.a
 end
 
 --========================================================--

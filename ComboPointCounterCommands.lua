@@ -14,8 +14,42 @@ end
 
 local Commands = {}
 
+local function OpenOptionsPanel()
+    if InCombatLockdown and InCombatLockdown() then
+        return false
+    end
+
+    if Settings and Settings.OpenToCategory and CPC.OptionsCategory and CPC.OptionsCategory.GetID then
+        Settings.OpenToCategory(CPC.OptionsCategory:GetID())
+        return true
+    end
+
+    if InterfaceOptionsFrame_OpenToCategory and CPC.OptionsPanel then
+        InterfaceOptionsFrame_OpenToCategory(CPC.OptionsPanel)
+        InterfaceOptionsFrame_OpenToCategory(CPC.OptionsPanel)
+        return true
+    end
+
+    return false
+end
+
+local pendingOpen = false
+local openFrame = CreateFrame("Frame")
+openFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+openFrame:SetScript("OnEvent", function()
+    if pendingOpen then
+        pendingOpen = false
+        OpenOptionsPanel()
+    end
+end)
+
 Commands.options = function()
-    Settings.OpenToCategory(CPC.OptionsCategory:GetID())
+    if OpenOptionsPanel() then
+        return
+    end
+
+    pendingOpen = true
+    print("Combo Point Counter: options can't open in combat. They will open when combat ends.")
 end
 
 Commands.show = function()

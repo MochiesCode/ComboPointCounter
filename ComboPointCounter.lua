@@ -1,9 +1,10 @@
--- Only load if player is a rogue
+-- Only load if player is a supported class
 local _, class = UnitClass("player")
-if class ~= "ROGUE" then return end
+if class ~= "ROGUE" and class ~= "DRUID" then return end
 
 -- Namespace
 local addonName, CPC = ...
+local DRUID_FERAL_SPEC_ID = 103
 
 local BORDER_ATLAS_CHOICES = {
     "ChallengeMode-KeystoneSlotFrameGlow",
@@ -185,7 +186,60 @@ local function UpdateCounter()
 end
 CPC.UpdateCounter = UpdateCounter
 
+local function IsFeralSpec()
+    if class ~= "DRUID" then
+        return false
+    end
+
+    if not GetSpecialization or not GetSpecializationInfo then
+        return false
+    end
+
+    local specIndex = GetSpecialization()
+    if not specIndex then
+        return false
+    end
+
+    local specID = GetSpecializationInfo(specIndex)
+    return specID == DRUID_FERAL_SPEC_ID
+end
+
+local function IsFeralCatForm()
+    if class ~= "DRUID" then
+        return false
+    end
+
+    if not GetShapeshiftForm then
+        return false
+    end
+
+    local currentForm = GetShapeshiftForm()
+    if not currentForm or currentForm == 0 then
+        return false
+    end
+
+    if GetShapeshiftFormID and CAT_FORM then
+        return GetShapeshiftFormID() == CAT_FORM
+    end
+
+    local _, powerTypeToken = UnitPowerType("player")
+    return powerTypeToken == "ENERGY"
+end
+
+local function IsDisplaySupported()
+    if class == "ROGUE" then
+        return true
+    end
+
+    return IsFeralSpec() and IsFeralCatForm()
+end
+
 local function UpdateVisibility()
+    if not IsDisplaySupported() then
+        frame:Hide()
+        return
+    end
+
     if ComboPointCounterDB.alwaysShow or UnitAffectingCombat("player") then
         frame:Show()
         UpdateCounter()
@@ -383,8 +437,13 @@ end
 --========================================================--
 local function HandleEvent(self, event, unit, powerType)
     if event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_ENTERING_WORLD"
+        or event == "UPDATE_SHAPESHIFT_FORM"
     then
         UpdateVisibility()
+    elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
+        if unit == "player" then
+            UpdateVisibility()
+        end
     elseif event == "UNIT_POWER_UPDATE" then
         if unit == "player" and powerType == "COMBO_POINTS" then
             UpdateCounter()
@@ -396,6 +455,10 @@ frame:RegisterEvent("PLAYER_REGEN_DISABLED")
 frame:RegisterEvent("PLAYER_REGEN_ENABLED")
 frame:RegisterEvent("UNIT_POWER_UPDATE")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+if class == "DRUID" then
+    frame:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
+    frame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+end
 frame:SetScript("OnEvent", HandleEvent)
 
 ApplyBorderAtlas()

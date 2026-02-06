@@ -1,6 +1,6 @@
--- Only load if player is a rogue
+-- Only load if player is a supported class
 local _, class = UnitClass("player")
-if class ~= "ROGUE" then return end
+if class ~= "ROGUE" and class ~= "DRUID" then return end
 
 local addonName, CPC = ...
 

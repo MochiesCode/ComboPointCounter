@@ -3,7 +3,7 @@
 ## Notes: Displays the number of combo points you have
 ## Author: Mochie
 ## Version: 1.0.2
-## SavedVariables: ComboPointCounterDB
+## SavedVariablesPerCharacter: ComboPointCounterDB
 ## LoadSavedVariablesFirst: 1
 
 ComboPointCounter.lua

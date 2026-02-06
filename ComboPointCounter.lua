@@ -4,7 +4,6 @@ if class ~= "ROGUE" and class ~= "DRUID" then return end
 
 -- Namespace
 local addonName, CPC = ...
-local DRUID_FERAL_SPEC_ID = 103
 
 local BORDER_ATLAS_CHOICES = {
     "ChallengeMode-KeystoneSlotFrameGlow",
@@ -186,25 +185,7 @@ local function UpdateCounter()
 end
 CPC.UpdateCounter = UpdateCounter
 
-local function IsFeralSpec()
-    if class ~= "DRUID" then
-        return false
-    end
-
-    if not GetSpecialization or not GetSpecializationInfo then
-        return false
-    end
-
-    local specIndex = GetSpecialization()
-    if not specIndex then
-        return false
-    end
-
-    local specID = GetSpecializationInfo(specIndex)
-    return specID == DRUID_FERAL_SPEC_ID
-end
-
-local function IsFeralCatForm()
+local function IsDruidCatForm()
     if class ~= "DRUID" then
         return false
     end
@@ -231,7 +212,7 @@ local function IsDisplaySupported()
         return true
     end
 
-    return IsFeralSpec() and IsFeralCatForm()
+    return IsDruidCatForm()
 end
 
 local function UpdateVisibility()
@@ -440,10 +421,6 @@ local function HandleEvent(self, event, unit, powerType)
         or event == "UPDATE_SHAPESHIFT_FORM"
     then
         UpdateVisibility()
-    elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
-        if unit == "player" then
-            UpdateVisibility()
-        end
     elseif event == "UNIT_POWER_UPDATE" then
         if unit == "player" and powerType == "COMBO_POINTS" then
             UpdateCounter()
@@ -457,7 +434,6 @@ frame:RegisterEvent("UNIT_POWER_UPDATE")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 if class == "DRUID" then
     frame:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
-    frame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 end
 frame:SetScript("OnEvent", HandleEvent)
 

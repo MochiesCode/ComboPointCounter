@@ -23,6 +23,7 @@ local DEFAULT_BORDER_ATLAS = BORDER_ATLAS_CHOICES[1]
 CPC.BORDER_ATLAS_CHOICES = BORDER_ATLAS_CHOICES
 local BORDER_TINT_ATLAS = "talents-node-circle-sheenmask"
 local DEFAULT_NUMBER_COLOR = { r = 1, g = 0.82, b = 0, a = 1 }
+local DEFAULT_FINISHER_NUMBER_COLOR = { r = 1, g = 1, b = 1, a = 1 }
 local SMALL_BORDER_SCALE = 0.6
 local SLIGHTLY_LARGER_SMALL_SCALE = SMALL_BORDER_SCALE * 1.05
 local TINT_BORDER_SCALE = 0.84
@@ -59,6 +60,7 @@ ComboPointCounterDB.backgroundColor.r = ComboPointCounterDB.backgroundColor.r or
 ComboPointCounterDB.backgroundColor.g = ComboPointCounterDB.backgroundColor.g or 0
 ComboPointCounterDB.backgroundColor.b = ComboPointCounterDB.backgroundColor.b or 0
 ComboPointCounterDB.backgroundColor.a = ComboPointCounterDB.backgroundColor.a or 0.6
+ComboPointCounterDB.finisherThreshold = ComboPointCounterDB.finisherThreshold or 6
 ComboPointCounterDB.finisherColor = ComboPointCounterDB.finisherColor or {}
 ComboPointCounterDB.finisherColor.r = ComboPointCounterDB.finisherColor.r or 0.75
 ComboPointCounterDB.finisherColor.g = ComboPointCounterDB.finisherColor.g or 0.5
@@ -69,6 +71,11 @@ ComboPointCounterDB.numberColor.r = ComboPointCounterDB.numberColor.r or DEFAULT
 ComboPointCounterDB.numberColor.g = ComboPointCounterDB.numberColor.g or DEFAULT_NUMBER_COLOR.g
 ComboPointCounterDB.numberColor.b = ComboPointCounterDB.numberColor.b or DEFAULT_NUMBER_COLOR.b
 ComboPointCounterDB.numberColor.a = ComboPointCounterDB.numberColor.a or DEFAULT_NUMBER_COLOR.a
+ComboPointCounterDB.finisherNumberColor = ComboPointCounterDB.finisherNumberColor or {}
+ComboPointCounterDB.finisherNumberColor.r = ComboPointCounterDB.finisherNumberColor.r or DEFAULT_FINISHER_NUMBER_COLOR.r
+ComboPointCounterDB.finisherNumberColor.g = ComboPointCounterDB.finisherNumberColor.g or DEFAULT_FINISHER_NUMBER_COLOR.g
+ComboPointCounterDB.finisherNumberColor.b = ComboPointCounterDB.finisherNumberColor.b or DEFAULT_FINISHER_NUMBER_COLOR.b
+ComboPointCounterDB.finisherNumberColor.a = ComboPointCounterDB.finisherNumberColor.a or DEFAULT_FINISHER_NUMBER_COLOR.a
 ComboPointCounterDB.borderTint = ComboPointCounterDB.borderTint or {}
 ComboPointCounterDB.borderTint.r = ComboPointCounterDB.borderTint.r or 1
 ComboPointCounterDB.borderTint.g = ComboPointCounterDB.borderTint.g or 1
@@ -167,9 +174,12 @@ local function ClampChannel(value, fallback)
 end
 
 local function ApplyFillColor(comboPoint)
-    local color = comboPoint >= 5 and ComboPointCounterDB.finisherColor or ComboPointCounterDB.backgroundColor
+    local threshold = ComboPointCounterDB.finisherThreshold or 6
+    local color = comboPoint >= threshold and ComboPointCounterDB.finisherColor or ComboPointCounterDB.backgroundColor
     fill:SetColorTexture(color.r, color.g, color.b, color.a)
 end
+
+local ApplyNumberColor -- forward declared; defined below, called from UpdateCounter
 
 local function UpdateCounter()
     C_Timer.After(0, function() -- Delayed by a frame because it doesn't always update offsets correctly if I don't
@@ -181,6 +191,7 @@ local function UpdateCounter()
         text:SetPoint("CENTER", frame, "CENTER", xOffset, 0)
 
         ApplyFillColor(comboPoint)
+        ApplyNumberColor(comboPoint)
     end)
 end
 CPC.UpdateCounter = UpdateCounter
@@ -236,8 +247,12 @@ local function UpdateFontSize()
     text:SetFont(BASE_FONT, fontSize, BASE_FONT_FLAGS)
 end
 
-local function ApplyNumberColor()
-    local c = ComboPointCounterDB.numberColor
+ApplyNumberColor = function(comboPoint)
+    if comboPoint == nil then
+        comboPoint = ComboPointCounterDB.debugValue or UnitPower("player", Enum.PowerType.ComboPoints) or 0
+    end
+    local threshold = ComboPointCounterDB.finisherThreshold or 6
+    local c = (comboPoint >= threshold) and ComboPointCounterDB.finisherNumberColor or ComboPointCounterDB.numberColor
     text:SetTextColor(c.r, c.g, c.b, c.a)
 end
 
@@ -349,6 +364,23 @@ function CPC.GetBackgroundColor()
     return c.r, c.g, c.b, c.a
 end
 
+function CPC.SetFinisherThreshold(value)
+    value = tonumber(value)
+    if not value then return end
+
+    value = math.floor(value + 0.5)
+    if value < 1 then value = 1 end
+    if value > 7 then value = 7 end
+
+    ComboPointCounterDB.finisherThreshold = value
+    UpdateCounter()
+    CPC.NotifyOptions()
+end
+
+function CPC.GetFinisherThreshold()
+    return ComboPointCounterDB.finisherThreshold or 6
+end
+
 function CPC.SetFinisherColor(r, g, b, a)
     local c = ComboPointCounterDB.finisherColor
     c.r = ClampChannel(r, c.r)
@@ -376,6 +408,21 @@ end
 
 function CPC.GetNumberColor()
     local c = ComboPointCounterDB.numberColor
+    return c.r, c.g, c.b, c.a
+end
+
+function CPC.SetFinisherNumberColor(r, g, b, a)
+    local c = ComboPointCounterDB.finisherNumberColor
+    c.r = ClampChannel(r, c.r)
+    c.g = ClampChannel(g, c.g)
+    c.b = ClampChannel(b, c.b)
+    c.a = ClampChannel(a, c.a)
+    ApplyNumberColor()
+    CPC.NotifyOptions()
+end
+
+function CPC.GetFinisherNumberColor()
+    local c = ComboPointCounterDB.finisherNumberColor
     return c.r, c.g, c.b, c.a
 end
 

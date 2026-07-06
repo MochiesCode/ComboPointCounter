@@ -23,6 +23,7 @@ ComboPointCounterDB.backgroundColor.r = ComboPointCounterDB.backgroundColor.r or
 ComboPointCounterDB.backgroundColor.g = ComboPointCounterDB.backgroundColor.g or 0
 ComboPointCounterDB.backgroundColor.b = ComboPointCounterDB.backgroundColor.b or 0
 ComboPointCounterDB.backgroundColor.a = ComboPointCounterDB.backgroundColor.a or 0.6
+ComboPointCounterDB.finisherThreshold = ComboPointCounterDB.finisherThreshold or 6
 ComboPointCounterDB.finisherColor = ComboPointCounterDB.finisherColor or {}
 ComboPointCounterDB.finisherColor.r = ComboPointCounterDB.finisherColor.r or 0.75
 ComboPointCounterDB.finisherColor.g = ComboPointCounterDB.finisherColor.g or 0.5
@@ -33,6 +34,11 @@ ComboPointCounterDB.numberColor.r = ComboPointCounterDB.numberColor.r or 1
 ComboPointCounterDB.numberColor.g = ComboPointCounterDB.numberColor.g or 0.82
 ComboPointCounterDB.numberColor.b = ComboPointCounterDB.numberColor.b or 0
 ComboPointCounterDB.numberColor.a = ComboPointCounterDB.numberColor.a or 1
+ComboPointCounterDB.finisherNumberColor = ComboPointCounterDB.finisherNumberColor or {}
+ComboPointCounterDB.finisherNumberColor.r = ComboPointCounterDB.finisherNumberColor.r or 1
+ComboPointCounterDB.finisherNumberColor.g = ComboPointCounterDB.finisherNumberColor.g or 1
+ComboPointCounterDB.finisherNumberColor.b = ComboPointCounterDB.finisherNumberColor.b or 1
+ComboPointCounterDB.finisherNumberColor.a = ComboPointCounterDB.finisherNumberColor.a or 1
 ComboPointCounterDB.borderTint = ComboPointCounterDB.borderTint or {}
 ComboPointCounterDB.borderTint.r = ComboPointCounterDB.borderTint.r or 1
 ComboPointCounterDB.borderTint.g = ComboPointCounterDB.borderTint.g or 1
@@ -383,11 +389,56 @@ UIDropDownMenu_SetText(borderAtlasDropdown, "")
 local DEFAULT_BG_COLOR = { r = 0, g = 0, b = 0, a = 0.6 }
 local DEFAULT_FINISHER_COLOR = { r = 0.75, g = 0.5, b = 0, a = 1 }
 local DEFAULT_NUMBER_COLOR = { r = 1, g = 0.82, b = 0, a = 1 }
+local DEFAULT_FINISHER_NUMBER_COLOR = { r = 1, g = 1, b = 1, a = 1 }
 local DEFAULT_BORDER_TINT = { r = 1, g = 1, b = 1, a = 1 }
+local DEFAULT_FINISHER_THRESHOLD = 6
 local BORDER_TINT_ATLAS = "talents-node-circle-sheenmask"
 local COLOR_ROW_SWATCH_X = 170
 local COLOR_ROW_RESET_X = 200
 local OFFSET_INPUT_X = 70
+
+--========================================================--
+-- Finisher Threshold Controls
+--========================================================--
+local thresholdLabel = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+thresholdLabel:SetPoint("TOPLEFT", borderAtlasLabel, "BOTTOMLEFT", 0, -16)
+thresholdLabel:SetText("Finisher Threshold")
+
+local thresholdSlider = CreateFrame("Slider", nil, content, "OptionsSliderTemplate")
+thresholdSlider:SetPoint("TOPLEFT", thresholdLabel, "BOTTOMLEFT", 0, -12)
+thresholdSlider:SetMinMaxValues(1, 7)
+thresholdSlider:SetValueStep(1)
+thresholdSlider:SetObeyStepOnDrag(true)
+thresholdSlider:SetWidth(105)
+thresholdSlider.Low:SetText("1")
+thresholdSlider.High:SetText("7")
+
+local thresholdBox = CreateFrame("EditBox", nil, content, "InputBoxTemplate")
+thresholdBox:SetSize(40, 20)
+thresholdBox:SetPoint("LEFT", thresholdSlider, "RIGHT", 12, 0)
+thresholdBox:SetAutoFocus(false)
+SetIntegerInputFilter(thresholdBox, false)
+RegisterTabBox(thresholdBox)
+
+thresholdSlider:SetScript("OnValueChanged", function(_, value)
+    CPC.SetFinisherThreshold(math.floor(value + 0.5))
+end)
+
+thresholdBox:SetScript("OnEnterPressed", function(self)
+    local v = ParseInteger(self:GetText())
+    if v then
+        CPC.SetFinisherThreshold(math.max(1, math.min(7, v)))
+    end
+    self:ClearFocus()
+end)
+
+local resetThreshold = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+resetThreshold:SetSize(80, 22)
+resetThreshold:SetPoint("LEFT", thresholdBox, "RIGHT", 6, 0)
+resetThreshold:SetText("Reset")
+resetThreshold:SetScript("OnClick", function()
+    CPC.SetFinisherThreshold(DEFAULT_FINISHER_THRESHOLD)
+end)
 
 local function CreateColorRow(labelText, anchor, yOffset, onPick, onReset)
     local row = CreateFrame("Frame", nil, content)
@@ -426,6 +477,7 @@ end
 local defaultColorRow, defaultColorButton
 local finisherColorRow, finisherColorButton
 local numberColorRow, numberColorButton
+local finisherNumberColorRow, finisherNumberColorButton
 local borderTintRow, borderTintButton
 local borderAtlasDropdownInitialized = false
 local UpdateContentHeight
@@ -492,7 +544,7 @@ local function InitializeBorderAtlasDropdown()
     borderAtlasDropdownInitialized = true
 end
 
-defaultColorRow, defaultColorButton = CreateColorRow("Base Background Tint", borderAtlasLabel, -18, function()
+defaultColorRow, defaultColorButton = CreateColorRow("Background Tint", thresholdSlider, -18, function()
     local r, g, b, a = CPC.GetBackgroundColor()
     ShowColorPicker(r, g, b, a, function(nr, ng, nb, na)
         CPC.SetBackgroundColor(nr, ng, nb, na)
@@ -528,7 +580,19 @@ end, function()
     numberColorButton.swatch:SetColorTexture(c.r, c.g, c.b, c.a)
 end)
 
-borderTintRow, borderTintButton = CreateColorRow("Border Tint", numberColorRow, -6, function()
+finisherNumberColorRow, finisherNumberColorButton = CreateColorRow("Finisher Number Tint", numberColorRow, -6, function()
+    local r, g, b, a = CPC.GetFinisherNumberColor()
+    ShowColorPicker(r, g, b, a, function(nr, ng, nb, na)
+        CPC.SetFinisherNumberColor(nr, ng, nb, na)
+        finisherNumberColorButton.swatch:SetColorTexture(nr, ng, nb, na)
+    end)
+end, function()
+    local c = DEFAULT_FINISHER_NUMBER_COLOR
+    CPC.SetFinisherNumberColor(c.r, c.g, c.b, c.a)
+    finisherNumberColorButton.swatch:SetColorTexture(c.r, c.g, c.b, c.a)
+end)
+
+borderTintRow, borderTintButton = CreateColorRow("Border Tint", finisherNumberColorRow, -6, function()
     local r, g, b, a = CPC.GetBorderTint()
     ShowColorPicker(r, g, b, a, function(nr, ng, nb, na)
         CPC.SetBorderTint(nr, ng, nb, na)
@@ -651,7 +715,7 @@ UpdateContentHeight = function()
 
     local top = content:GetTop()
     local offsetBottom = lastOffsetRow:GetBottom()
-    local colorBottom = numberColorRow and numberColorRow:GetBottom() or nil
+    local colorBottom = finisherNumberColorRow and finisherNumberColorRow:GetBottom() or nil
     local borderTintBottom = (borderTintRow and borderTintRow:IsShown()) and borderTintRow:GetBottom() or nil
     if not top or not offsetBottom then return end
 
@@ -686,11 +750,17 @@ function CPC.RefreshAllOptions()
     finisherColorButton.swatch:SetColorTexture(fr, fg, fb, fa)
     local nr, ng, nb, na = CPC.GetNumberColor()
     numberColorButton.swatch:SetColorTexture(nr, ng, nb, na)
+    local fnr, fng, fnb, fna = CPC.GetFinisherNumberColor()
+    finisherNumberColorButton.swatch:SetColorTexture(fnr, fng, fnb, fna)
     local tr, tg, tb, ta = CPC.GetBorderTint()
     borderTintButton.swatch:SetColorTexture(tr, tg, tb, ta)
     InitializeBorderAtlasDropdown()
     UpdateBorderAtlasDropdownText()
     UpdateBorderTintVisibility()
+
+    local threshold = CPC.GetFinisherThreshold and CPC.GetFinisherThreshold() or ComboPointCounterDB.finisherThreshold or DEFAULT_FINISHER_THRESHOLD
+    thresholdSlider:SetValue(threshold)
+    thresholdBox:SetText(tostring(threshold))
 
     local debugEnabled = ComboPointCounterDB.debugValue ~= nil
     debugCheck:SetChecked(debugEnabled)

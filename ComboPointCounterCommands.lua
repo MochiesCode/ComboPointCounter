@@ -81,6 +81,13 @@ Commands.offset = function(args)
     end
 end
 
+Commands.threshold = function(args)
+    local t = tonumber(args[1])
+    if t then
+        CPC.SetFinisherThreshold(t)
+    end
+end
+
 Commands.debug = function(args)
     if args[1] == "off" then
         CPC.SetDebugValue(nil)

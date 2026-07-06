@@ -163,7 +163,7 @@ end
 --========================================================--
 local title = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 title:SetPoint("TOPLEFT", 16, -16)
-title:SetText("Combo Point Counter v1.1")
+title:SetText("Combo Point Counter v1.3")
 
 local subtitle = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)

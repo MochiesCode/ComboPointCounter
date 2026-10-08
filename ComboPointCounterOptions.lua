@@ -244,7 +244,12 @@ sizeBox:SetAutoFocus(false)
 SetIntegerInputFilter(sizeBox, false)
 RegisterTabBox(sizeBox)
 
+-- Set while RefreshAllOptions syncs widgets, so programmatic SetValue calls
+-- don't feed clamped slider values back into the saved settings.
+local refreshing = false
+
 sizeSlider:SetScript("OnValueChanged", function(_, value)
+    if refreshing then return end
     CPC.SetFrameSize(math.floor(value + 0.5))
 end)
 
@@ -421,6 +426,7 @@ SetIntegerInputFilter(thresholdBox, false)
 RegisterTabBox(thresholdBox)
 
 thresholdSlider:SetScript("OnValueChanged", function(_, value)
+    if refreshing then return end
     CPC.SetFinisherThreshold(math.floor(value + 0.5))
 end)
 
@@ -735,6 +741,7 @@ UpdateContentHeight = function()
 end
 
 function CPC.RefreshAllOptions()
+    refreshing = true
     alwaysShow:SetChecked(ComboPointCounterDB.alwaysShow)
 
     sizeSlider:SetValue(ComboPointCounterDB.size)
@@ -770,6 +777,7 @@ function CPC.RefreshAllOptions()
     for i = 0, 7 do
         offsetBoxes[i].box:SetText(ComboPointCounterDB.textOffsets[i] or 0)
     end
+    refreshing = false
 end
 
 panel:SetScript("OnShow", function()

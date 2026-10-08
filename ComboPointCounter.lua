@@ -181,18 +181,27 @@ end
 
 local ApplyNumberColor -- forward declared; defined below, called from UpdateCounter
 
+local updatePending = false
+
+local function DoUpdateCounter()
+    updatePending = false
+    local comboPoint = ComboPointCounterDB.debugValue or UnitPower("player", Enum.PowerType.ComboPoints) or 0
+
+    text:SetText("") -- More offset weirdness, need this for some reason
+    text:SetText(comboPoint)
+    local xOffset = ComboPointCounterDB.textOffsets[comboPoint] or 0
+    text:SetPoint("CENTER", frame, "CENTER", xOffset, 0)
+
+    ApplyFillColor(comboPoint)
+    ApplyNumberColor(comboPoint)
+end
+
+-- Delayed by a frame because it doesn't always update offsets correctly if I don't.
+-- Multiple calls within the same frame collapse into a single update.
 local function UpdateCounter()
-    C_Timer.After(0, function() -- Delayed by a frame because it doesn't always update offsets correctly if I don't
-        local comboPoint = ComboPointCounterDB.debugValue or UnitPower("player", Enum.PowerType.ComboPoints) or 0
-
-        text:SetText("") -- More offset weirdness, need this for some reason
-        text:SetText(comboPoint)
-        local xOffset = ComboPointCounterDB.textOffsets[comboPoint] or 0
-        text:SetPoint("CENTER", frame, "CENTER", xOffset, 0)
-
-        ApplyFillColor(comboPoint)
-        ApplyNumberColor(comboPoint)
-    end)
+    if updatePending then return end
+    updatePending = true
+    C_Timer.After(0, DoUpdateCounter)
 end
 CPC.UpdateCounter = UpdateCounter
 
@@ -469,7 +478,8 @@ local function HandleEvent(self, event, unit, powerType)
     then
         UpdateVisibility()
     elseif event == "UNIT_POWER_UPDATE" then
-        if unit == "player" and powerType == "COMBO_POINTS" then
+        -- Hidden frames get refreshed by UpdateVisibility when they're shown
+        if powerType == "COMBO_POINTS" and frame:IsShown() then
             UpdateCounter()
         end
     end
@@ -477,7 +487,7 @@ end
 
 frame:RegisterEvent("PLAYER_REGEN_DISABLED")
 frame:RegisterEvent("PLAYER_REGEN_ENABLED")
-frame:RegisterEvent("UNIT_POWER_UPDATE")
+frame:RegisterUnitEvent("UNIT_POWER_UPDATE", "player")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 if class == "DRUID" then
     frame:RegisterEvent("UPDATE_SHAPESHIFT_FORM")

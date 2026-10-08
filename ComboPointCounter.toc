@@ -3,6 +3,7 @@
 ## Notes: Displays the number of combo points you have
 ## Author: Mochie
 ## Version: 1.4
+## IconTexture: Interface\AddOns\ComboPointCounter\ComboPointCounterIcon
 ## SavedVariablesPerCharacter: ComboPointCounterDB
 ## LoadSavedVariablesFirst: 1
 

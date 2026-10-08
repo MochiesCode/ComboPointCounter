@@ -6,3 +6,7 @@ Displays the number of combo points you have. When in finisher range the backgro
 /cpc --Opens options window
 
 Hold shift and left click to drag move the frame
+
+Development:
+
+luajit tests/harness.lua --Runs the addon against a mock WoW API (needs LuaJIT or Lua 5.1). The tests folder is not included in releases.

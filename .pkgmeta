@@ -1,0 +1,4 @@
+package-as: ComboPointCounter
+
+ignore:
+  - tests

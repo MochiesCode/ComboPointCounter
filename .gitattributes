@@ -1,2 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Keep dev-only files out of GitHub release/source zips
+/tests export-ignore
+/.pkgmeta export-ignore

@@ -45,12 +45,16 @@ local function NewWidget(kind, parent, template)
     local w = setmetatable({ kind = kind, parent = parent, scripts = {}, hooks = {}, events = {},
         unitEvents = {}, shown = true, text = "", checked = false, enabled = true,
         value = 0, min = 0, max = 1, points = {} }, Widget)
-    if template == "InterfaceOptionsCheckButtonTemplate" then
-        w.Text = NewWidget("FontString", w)
-    elseif template == "OptionsSliderTemplate" then
-        w.Low, w.High = NewWidget("FontString", w), NewWidget("FontString", w)
-    end
     state.widgets[#state.widgets + 1] = w
+    if template == "MinimalSliderWithSteppersTemplate" then
+        w.Slider, w.callbacks = NewWidget("Slider", w), {}
+        w.Slider:SetScript("OnValueChanged", function(_, v)
+            for _, cb in ipairs(w.callbacks) do cb.fn(cb.owner, v) end
+        end)
+    elseif template == "SettingsDropdownWithButtonsTemplate" then
+        w.Dropdown = NewWidget("DropdownButton", w)
+        w.DecrementButton, w.IncrementButton = NewWidget("Button", w), NewWidget("Button", w)
+    end
     return w
 end
 
@@ -76,6 +80,8 @@ function Widget:GetChecked() return self.checked end
 function Widget:GetCursorPosition() return #self.text end
 function Widget:SetMinMaxValues(a, b) self.min, self.max = a, b end
 function Widget:SetValue(v)
+    local inner = rawget(self, "Slider")
+    if inner then return inner:SetValue(v) end -- stepper frame forwards to its slider
     v = math.max(self.min, math.min(self.max, v))
     if v ~= self.value then self.value = v; self:Fire("OnValueChanged", v) end
 end
@@ -95,6 +101,20 @@ function Widget:GetFont() return "Fonts\\FRIZQT__.TTF", 16, "" end
 function Widget:CreateTexture() return NewWidget("Texture", self) end
 function Widget:CreateMaskTexture() return NewWidget("MaskTexture", self) end
 function Widget:CreateFontString() return NewWidget("FontString", self) end
+-- MinimalSliderWithSteppersTemplate
+function Widget:Init(value, lo, hi) self.Slider:SetMinMaxValues(lo, hi); self.Slider:SetValue(value) end
+function Widget:RegisterCallback(event, fn, owner) self.callbacks[#self.callbacks + 1] = { fn = fn, owner = owner } end
+-- WowStyle1DropdownTemplate: GenerateMenu rebuilds the radios and shows the selected one's text
+function Widget:SetupMenu(gen) self.menuGen = gen; self:GenerateMenu() end
+function Widget:GenerateMenu()
+    local radios = {}
+    local root = { CreateRadio = function(_, text, isSelected, setSelected, data)
+        radios[#radios + 1] = { text = text, isSelected = isSelected, setSelected = setSelected, data = data }
+    end }
+    self.menuGen(self, root)
+    self.radios = radios
+    for _, r in ipairs(radios) do if r.isSelected(r.data) then self.text = r.text end end
+end
 
 ---------------------------------------------------------------- boot
 local function Boot(class, db, opts)
@@ -122,11 +142,8 @@ local function Boot(class, db, opts)
         RegisterAddOnCategory = function() end,
         OpenToCategory = function(id) state.opened[#state.opened + 1] = id end,
     })
-    rawset(_G, "UIDropDownMenu_SetWidth", function() end)
-    rawset(_G, "UIDropDownMenu_SetText", function(dd, t) dd.ddText = t end)
-    rawset(_G, "UIDropDownMenu_Initialize", function(dd, fn) dd.initFn = fn end)
-    rawset(_G, "UIDropDownMenu_CreateInfo", function() return {} end)
-    rawset(_G, "UIDropDownMenu_AddButton", function(info) state.ddButtons[#state.ddButtons + 1] = info end)
+    rawset(_G, "ScrollUtil", { InitScrollFrameWithScrollBar = function() end })
+    rawset(_G, "MinimalSliderWithSteppersMixin", { Event = { OnValueChanged = "OnValueChanged" }, Label = { Right = 2 } })
     local picker = NewWidget("Frame")
     function picker:SetupColorPickerAndShow(info) self.info = info end
     function picker:GetColorRGB() return unpack(self.rgb) end
@@ -260,8 +277,8 @@ Test("Options panel: refresh, out-of-range size not clobbered, controls", functi
     panel:Fire("OnShow")
     check(ComboPointCounterDB.size == 200, "opening options keeps size 200 (slider clamp not written back)")
 
-    local title = Find(function(w) return w.kind == "FontString" and w.text:match("^Combo Point Counter v") end)
-    check(title and title.text == "Combo Point Counter v1.3", "title uses .toc version")
+    local version = Find(function(w) return w.kind == "FontString" and w.text:match("^v%d") end)
+    check(version and version.text == "v1.3", "header shows .toc version")
 
     -- size slider user drag
     local sizeSlider = Find(function(w) return w.kind == "Slider" and w.max == 128 end)
@@ -274,7 +291,7 @@ Test("Options panel: refresh, out-of-range size not clobbered, controls", functi
     -- reset buttons
     local resets = {}
     for _, w in ipairs(state.widgets) do if w.kind == "Button" and w.text == "Reset" then resets[#resets + 1] = w end end
-    check(#resets == 8, "3 setting resets + 5 color resets (got " .. #resets .. ")")
+    check(#resets == 9, "4 setting resets + 5 color resets (got " .. #resets .. ")")
     for _, r in ipairs(resets) do r:Fire("OnClick") end
     local db = ComboPointCounterDB
     check(db.size == 25 and db.finisherThreshold == 6 and db.x == 0 and db.y == 0, "resets restore defaults")
@@ -295,18 +312,31 @@ Test("Options panel: refresh, out-of-range size not clobbered, controls", functi
     check(approx(bg.r, 0) and approx(bg.a, 0.6), "cancel restores previous color")
 
     -- border atlas dropdown -> Solid Color shows tint row
-    local dd = Find(function(w) return w.initFn end)
-    state.ddButtons = {}
-    dd.initFn(dd, 1)
-    check(#state.ddButtons == 6, "six border choices")
+    local dd = Find(function(w) return w.menuGen end)
+    check(#dd.radios == 6, "six border choices")
+    check(dd.text == "Glow 1", "dropdown shows current border")
     local tintRow = swatchButtons[5].parent
     check(not tintRow.shown, "tint row hidden for default border")
-    for _, b in ipairs(state.ddButtons) do if b.text == "Solid Color" then b.func() end end
+    for _, r in ipairs(dd.radios) do if r.text == "Solid Color" then r.setSelected(r.data) end end
     check(db.borderAtlas == "talents-node-circle-sheenmask", "border atlas set")
-    check(dd.ddText == "Solid Color" and tintRow.shown, "dropdown text updated and tint row shown")
+    check(dd.text == "Solid Color" and tintRow.shown, "dropdown text updated and tint row shown")
+
+    -- arrows step through the border list and stop at the ends
+    local stepper = dd.parent
+    check(not stepper.IncrementButton.enabled and stepper.DecrementButton.enabled, "next arrow disabled on last border")
+    stepper.DecrementButton:Fire("OnClick")
+    check(db.borderAtlas == "services-cover-ring" and dd.text == "Ring", "previous arrow selects Ring")
+    check(stepper.IncrementButton.enabled and not tintRow.shown, "next arrow re-enabled, tint row hidden")
+    stepper.IncrementButton:Fire("OnClick")
+    check(db.borderAtlas == "talents-node-circle-sheenmask", "next arrow steps forward")
     CPC.SetColor("borderTint", 1, 0, 0, 1)
     local border = Find(function(w) return w.atlas == "talents-node-circle-sheenmask" end)
     check(border and approx(border.vertex[2], 0), "border tint applied")
+
+    local borderReset = Find(function(w) return w.kind == "Button" and w.text == "Reset" and w.parent == stepper.parent end)
+    borderReset:Fire("OnClick")
+    check(db.borderAtlas == "ChallengeMode-KeystoneSlotFrameGlow" and dd.text == "Glow 1", "border reset restores default")
+    check(not stepper.DecrementButton.enabled and not tintRow.shown, "border reset updates arrows and tint row")
 
     -- force number checkbox + box
     local debugBox

@@ -17,18 +17,38 @@ Settings.RegisterAddOnCategory(category)
 CPC.OptionsCategory = category
 
 --========================================================--
+-- Header (mirrors the Blizzard settings category header)
+--========================================================--
+local title = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightHuge")
+title:SetPoint("TOPLEFT", 7, -22)
+title:SetText(panel.name)
+
+local version = panel:CreateFontString(nil, "ARTWORK", "GameFontDisable")
+version:SetPoint("BOTTOMLEFT", title, "BOTTOMRIGHT", 8, 1)
+version:SetText("v" .. (C_AddOns.GetAddOnMetadata(addonName, "Version") or "?"))
+
+local divider = panel:CreateTexture(nil, "ARTWORK")
+divider:SetAtlas("Options_HorizontalDivider", true)
+divider:SetPoint("TOP", 0, -50)
+
+--========================================================--
 -- Scroll Frame
 --========================================================--
-local scrollFrame = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
-scrollFrame:SetPoint("TOPLEFT", 0, 0)
-scrollFrame:SetPoint("BOTTOMRIGHT", -28, 0)
+local scrollFrame = CreateFrame("ScrollFrame", nil, panel)
+scrollFrame:SetPoint("TOPLEFT", 0, -56)
+scrollFrame:SetPoint("BOTTOMRIGHT", -20, 4)
+
+local scrollBar = CreateFrame("EventFrame", nil, panel, "MinimalScrollBar")
+scrollBar:SetPoint("TOPLEFT", scrollFrame, "TOPRIGHT", 6, 0)
+scrollBar:SetPoint("BOTTOMLEFT", scrollFrame, "BOTTOMRIGHT", 6, 0)
+ScrollUtil.InitScrollFrameWithScrollBar(scrollFrame, scrollBar)
 
 local content = CreateFrame("Frame", nil, scrollFrame)
 content:SetPoint("TOPLEFT")
 content:SetSize(1, 1)
 scrollFrame:SetScrollChild(content)
 
-scrollFrame:SetScript("OnSizeChanged", function(self, width)
+scrollFrame:HookScript("OnSizeChanged", function(self, width)
     content:SetWidth(width)
 end)
 
@@ -114,155 +134,126 @@ local function SetIntegerInputFilter(box, allowNegative)
 end
 
 --========================================================--
--- Header Text
+-- Row Layout (same metrics as the Blizzard settings list)
 --========================================================--
-local title = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-title:SetPoint("TOPLEFT", 16, -16)
-title:SetText("Combo Point Counter v" .. (C_AddOns.GetAddOnMetadata(addonName, "Version") or "?"))
+local ROW_HEIGHT = 38
+local COMPACT_ROW_HEIGHT = 26 -- the long list of digit offsets stays tight
+local SECTION_HEIGHT = 45
+local LABEL_INDENT = 37
+local CONTROL_OFFSET = -80 -- controls start this far left of the row's center
+local SLIDER_WIDTH = 200
+local RESET_WIDTH = 70
 
-local subtitle = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
-subtitle:SetText("Configuration options")
+local rows = {}
 
-local DIGIT_COLUMN_MIN_OFFSET = 240
+local function AddSection(text)
+    local row = CreateFrame("Frame", nil, content)
+    row.height = SECTION_HEIGHT
 
-local function GetDigitColumnOffset()
-    local width = content:GetWidth() or 0
-    if width <= 0 then
-        return DIGIT_COLUMN_MIN_OFFSET
-    end
+    local header = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightLarge")
+    header:SetPoint("TOPLEFT", 7, -16)
+    header:SetText(text)
 
-    local halfWidth = math.floor(width * 0.5)
-    return math.max(DIGIT_COLUMN_MIN_OFFSET, halfWidth)
+    rows[#rows + 1] = row
+    return row
 end
 
-local BORDER_ATLAS_LABELS = {
-    ["ChallengeMode-KeystoneSlotFrameGlow"] = "Glow 1",
-    ["ChallengeMode-KeystoneSlotFrame"] = "Ornate",
-    ["lemixArtifact-node-circle-glw-FX"] = "Glow 2",
-    ["dragonflight-landingbutton-circlehighlight"] = "Container",
-    ["services-cover-ring"] = "Ring",
-    ["talents-node-circle-sheenmask"] = "Solid Color",
-}
+local function AddRow(labelText, height)
+    local row = CreateFrame("Frame", nil, content)
+    row.height = height or ROW_HEIGHT
 
+    local label = row:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    label:SetPoint("LEFT", LABEL_INDENT, 0)
+    label:SetPoint("RIGHT", row, "CENTER", CONTROL_OFFSET - 8, 0)
+    label:SetJustifyH("LEFT")
+    label:SetText(labelText)
+
+    rows[#rows + 1] = row
+    return row
+end
+
+local function PlaceControl(row, control)
+    control:SetPoint("LEFT", row, "CENTER", CONTROL_OFFSET, 0)
+end
+
+-- Stacks the visible rows top to bottom and sizes the scroll child to fit
+local function LayoutRows()
+    local y = 0
+    for _, row in ipairs(rows) do
+        if row:IsShown() then
+            row:ClearAllPoints()
+            row:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y)
+            row:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -y)
+            row:SetHeight(row.height)
+            y = y + row.height
+        end
+    end
+    content:SetHeight(y + 16)
+end
+
+--========================================================--
+-- Widget Factories
+--========================================================--
 -- Set while RefreshAllOptions syncs widgets, so programmatic SetValue calls
 -- don't feed clamped slider values back into the saved settings.
 local refreshing = false
 
---========================================================--
--- Visibility Options
---========================================================--
-local alwaysShow = CreateFrame("CheckButton", nil, content, "InterfaceOptionsCheckButtonTemplate")
-alwaysShow.Text:SetText("Always show")
-alwaysShow.Text:ClearAllPoints()
-alwaysShow.Text:SetPoint("RIGHT", alwaysShow, "LEFT", -4, 1)
-alwaysShow:SetPoint("TOPRIGHT", content, "TOPRIGHT", -16, -16)
-alwaysShow:SetScript("OnClick", function(self)
-    CPC.SetAlwaysShow(self:GetChecked())
-end)
+local function CreateCheckbox(parent)
+    local check = CreateFrame("CheckButton", nil, parent)
+    check:SetSize(30, 29)
+    check:SetNormalAtlas("checkbox-minimal")
+    check:SetPushedAtlas("checkbox-minimal")
+    check:SetHighlightAtlas("checkbox-minimal", "ADD")
 
---========================================================--
--- Frame Size Controls
---========================================================--
-local sizeHeader = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-sizeHeader:SetPoint("TOPLEFT", subtitle, "BOTTOMLEFT", 0, -16)
-sizeHeader:SetText("Frame Size")
+    local mark = check:CreateTexture(nil, "OVERLAY")
+    mark:SetAtlas("checkmark-minimal")
+    mark:SetAllPoints()
+    check:SetCheckedTexture(mark)
 
-local sizeSlider = CreateFrame("Slider", nil, content, "OptionsSliderTemplate")
-sizeSlider:SetPoint("TOPLEFT", sizeHeader, "BOTTOMLEFT", 0, -12)
-sizeSlider:SetMinMaxValues(8, 128)
-sizeSlider:SetValueStep(1)
-sizeSlider:SetObeyStepOnDrag(true)
-sizeSlider:SetWidth(105)
-sizeSlider.Low:SetText("8")
-sizeSlider.High:SetText("128")
+    local disabledMark = check:CreateTexture(nil, "OVERLAY")
+    disabledMark:SetAtlas("checkmark-minimal-disabled")
+    disabledMark:SetAllPoints()
+    check:SetDisabledCheckedTexture(disabledMark)
 
-local sizeBox = CreateFrame("EditBox", nil, content, "InputBoxTemplate")
-sizeBox:SetSize(50, 20)
-sizeBox:SetPoint("LEFT", sizeSlider, "RIGHT", 12, 0)
-sizeBox:SetAutoFocus(false)
-SetIntegerInputFilter(sizeBox, false)
-RegisterTabBox(sizeBox)
-
-sizeSlider:SetScript("OnValueChanged", function(_, value)
-    if refreshing then return end
-    CPC.SetFrameSize(math.floor(value + 0.5))
-end)
-
-sizeBox:SetScript("OnEnterPressed", function(self)
-    local v = ParseInteger(self:GetText())
-    if v then
-        CPC.SetFrameSize(math.max(8, math.min(128, v)))
-    end
-    self:ClearFocus()
-end)
-
-local resetSize = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
-resetSize:SetSize(80, 22)
-resetSize:SetPoint("LEFT", sizeBox, "RIGHT", 6, 0)
-resetSize:SetText("Reset")
-resetSize:SetScript("OnClick", function()
-    CPC.SetFrameSize(DEFAULTS.size)
-end)
-
---========================================================--
--- Frame Position Controls
---========================================================--
-local posHeader = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-posHeader:SetPoint("TOPLEFT", sizeSlider, "BOTTOMLEFT", 0, -34)
-posHeader:SetText("Frame Position")
-
-local posXLabel = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-posXLabel:SetPoint("TOPLEFT", posHeader, "BOTTOMLEFT", 0, -10)
-posXLabel:SetText("X")
-
-local posX = CreateFrame("EditBox", nil, content, "InputBoxTemplate")
-posX:SetSize(60, 20)
-posX:SetPoint("LEFT", posXLabel, "RIGHT", 8, 0)
-posX:SetAutoFocus(false)
-SetIntegerInputFilter(posX, true)
-RegisterTabBox(posX)
-
-local posYLabel = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-posYLabel:SetPoint("LEFT", posX, "RIGHT", 8, 0)
-posYLabel:SetText("Y")
-
-local posY = CreateFrame("EditBox", nil, content, "InputBoxTemplate")
-posY:SetSize(60, 20)
-posY:SetPoint("LEFT", posYLabel, "RIGHT", 8, 0)
-posY:SetAutoFocus(false)
-SetIntegerInputFilter(posY, true)
-RegisterTabBox(posY)
-
-local function ApplyPosition()
-    local x = ParseInteger(posX:GetText())
-    local y = ParseInteger(posY:GetText())
-    if x and y then
-        CPC.SetFramePosition(x, y)
-    end
+    return check
 end
 
-posX:SetScript("OnEnterPressed", function(self) ApplyPosition(); self:ClearFocus() end)
-posY:SetScript("OnEnterPressed", function(self) ApplyPosition(); self:ClearFocus() end)
+local function FormatInteger(value)
+    return math.floor(value + 0.5)
+end
 
-local applyPos = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
-applyPos:SetHeight(22)
-applyPos:SetPoint("TOPLEFT", posX, "BOTTOMLEFT", 0, -10)
-applyPos:SetPoint("TOPRIGHT", posY, "BOTTOMRIGHT", 0, -10)
-applyPos:SetText("Apply")
-applyPos:SetScript("OnClick", ApplyPosition)
+local function CreateSlider(row, minValue, maxValue, onChange)
+    local slider = CreateFrame("Frame", nil, row, "MinimalSliderWithSteppersTemplate")
+    slider:SetWidth(SLIDER_WIDTH)
+    PlaceControl(row, slider)
+    slider:Init(minValue, minValue, maxValue, maxValue - minValue, {
+        [MinimalSliderWithSteppersMixin.Label.Right] = FormatInteger,
+    })
+    slider:RegisterCallback(MinimalSliderWithSteppersMixin.Event.OnValueChanged, function(_, value)
+        if refreshing then return end
+        onChange(FormatInteger(value))
+    end, slider)
+    return slider
+end
 
-local resetPos = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
-resetPos:SetSize(80, 22)
-resetPos:SetPoint("LEFT", posY, "RIGHT", 6, 0)
-resetPos:SetText("Reset")
-resetPos:SetScript("OnClick", function()
-    CPC.SetFramePosition(DEFAULTS.x, DEFAULTS.y)
-end)
+local function CreateResetButton(row, anchor, xOffset, onClick)
+    local reset = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    reset:SetSize(RESET_WIDTH, 22)
+    reset:SetPoint("LEFT", anchor, "RIGHT", xOffset, 0)
+    reset:SetText("Reset")
+    reset:SetScript("OnClick", onClick)
+    return reset
+end
 
---========================================================--
--- Color Controls
---========================================================--
+local function CreateInputBox(parent, width, allowNegative)
+    local box = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
+    box:SetSize(width, 20)
+    box:SetAutoFocus(false)
+    SetIntegerInputFilter(box, allowNegative)
+    RegisterTabBox(box)
+    return box
+end
+
 local function ShowColorPicker(r, g, b, a, onChange)
     local function ApplyNew()
         local nr, ng, nb = ColorPickerFrame:GetColorRGB()
@@ -284,100 +275,155 @@ local function ShowColorPicker(r, g, b, a, onChange)
     })
 end
 
-local colorsHeader = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-colorsHeader:SetPoint("TOPLEFT", posHeader, "BOTTOMLEFT", 0, -80)
-colorsHeader:SetText("Style")
-
-local borderAtlasLabel = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-borderAtlasLabel:SetPoint("TOPLEFT", colorsHeader, "BOTTOMLEFT", 0, -16)
-borderAtlasLabel:SetText("Border")
-
-local borderAtlasDropdown = CreateFrame("Frame", "ComboPointCounterBorderAtlasDropdown", content, "UIDropDownMenuTemplate")
-borderAtlasDropdown:SetPoint("LEFT", borderAtlasLabel, "RIGHT", 4, -2)
-UIDropDownMenu_SetWidth(borderAtlasDropdown, 170)
-UIDropDownMenu_SetText(borderAtlasDropdown, "")
-
-local COLOR_ROW_SWATCH_X = 170
-local COLOR_ROW_RESET_X = 200
-local OFFSET_INPUT_X = 70
-
---========================================================--
--- Finisher Threshold Controls
---========================================================--
-local thresholdLabel = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-thresholdLabel:SetPoint("TOPLEFT", borderAtlasLabel, "BOTTOMLEFT", 0, -16)
-thresholdLabel:SetText("Finisher Threshold")
-
-local thresholdSlider = CreateFrame("Slider", nil, content, "OptionsSliderTemplate")
-thresholdSlider:SetPoint("TOPLEFT", thresholdLabel, "BOTTOMLEFT", 0, -12)
-thresholdSlider:SetMinMaxValues(1, 7)
-thresholdSlider:SetValueStep(1)
-thresholdSlider:SetObeyStepOnDrag(true)
-thresholdSlider:SetWidth(105)
-thresholdSlider.Low:SetText("1")
-thresholdSlider.High:SetText("7")
-
-local thresholdBox = CreateFrame("EditBox", nil, content, "InputBoxTemplate")
-thresholdBox:SetSize(40, 20)
-thresholdBox:SetPoint("LEFT", thresholdSlider, "RIGHT", 12, 0)
-thresholdBox:SetAutoFocus(false)
-SetIntegerInputFilter(thresholdBox, false)
-RegisterTabBox(thresholdBox)
-
-thresholdSlider:SetScript("OnValueChanged", function(_, value)
-    if refreshing then return end
-    CPC.SetFinisherThreshold(math.floor(value + 0.5))
-end)
-
-thresholdBox:SetScript("OnEnterPressed", function(self)
-    local v = ParseInteger(self:GetText())
-    if v then
-        CPC.SetFinisherThreshold(math.max(1, math.min(7, v)))
-    end
-    self:ClearFocus()
-end)
-
-local resetThreshold = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
-resetThreshold:SetSize(80, 22)
-resetThreshold:SetPoint("LEFT", thresholdBox, "RIGHT", 6, 0)
-resetThreshold:SetText("Reset")
-resetThreshold:SetScript("OnClick", function()
-    CPC.SetFinisherThreshold(DEFAULTS.finisherThreshold)
-end)
-
-local function CreateColorRow(labelText, anchor, yOffset, onPick, onReset)
-    local row = CreateFrame("Frame", nil, content)
-    row:SetSize(320, 22)
-    row:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, yOffset)
-
-    local label = row:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    label:SetPoint("LEFT")
-    label:SetText(labelText)
-
+local function CreateColorSwatch(row, onClick)
     local button = CreateFrame("Button", nil, row)
     button:SetSize(22, 22)
-    button:SetPoint("LEFT", row, "LEFT", COLOR_ROW_SWATCH_X, 0)
-    button:SetHighlightTexture("Interface/Buttons/ButtonHilight-Square")
+    PlaceControl(row, button)
+
+    local edge = button:CreateTexture(nil, "BACKGROUND")
+    edge:SetAllPoints()
+    edge:SetColorTexture(0.6, 0.6, 0.6, 1)
+
+    local inner = button:CreateTexture(nil, "BORDER")
+    inner:SetPoint("TOPLEFT", 1, -1)
+    inner:SetPoint("BOTTOMRIGHT", -1, 1)
+    inner:SetColorTexture(0, 0, 0, 1)
 
     local swatch = button:CreateTexture(nil, "ARTWORK")
-    swatch:SetPoint("CENTER")
-    swatch:SetSize(14, 14)
+    swatch:SetPoint("TOPLEFT", 3, -3)
+    swatch:SetPoint("BOTTOMRIGHT", -3, 3)
 
-    local border = button:CreateTexture(nil, "BORDER")
-    border:SetAllPoints()
-    border:SetTexture("Interface/Buttons/UI-Quickslot2")
+    local highlight = button:CreateTexture(nil, "HIGHLIGHT")
+    highlight:SetAllPoints()
+    highlight:SetColorTexture(1, 1, 1, 0.2)
 
     button.swatch = swatch
-    button:SetScript("OnClick", onPick)
-
-    local reset = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-    reset:SetSize(50, 22)
-    reset:SetPoint("LEFT", row, "LEFT", COLOR_ROW_RESET_X, 0)
-    reset:SetText("Reset")
-    reset:SetScript("OnClick", onReset)
-
-    return row, button
+    button:SetScript("OnClick", onClick)
+    return button
 end
+
+--========================================================--
+-- General
+--========================================================--
+AddSection("General")
+
+local alwaysShowRow = AddRow("Always Show")
+local alwaysShow = CreateCheckbox(alwaysShowRow)
+PlaceControl(alwaysShowRow, alwaysShow)
+alwaysShow:SetScript("OnClick", function(self)
+    CPC.SetAlwaysShow(self:GetChecked())
+end)
+
+local sizeRow = AddRow("Frame Size")
+local sizeSlider = CreateSlider(sizeRow, 8, 128, CPC.SetFrameSize)
+CreateResetButton(sizeRow, sizeSlider, 40, function()
+    CPC.SetFrameSize(DEFAULTS.size)
+end)
+
+local posRow = AddRow("Frame Position")
+
+local posXLabel = posRow:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+PlaceControl(posRow, posXLabel)
+posXLabel:SetText("X")
+
+local posX = CreateInputBox(posRow, 55, true)
+posX:SetPoint("LEFT", posXLabel, "RIGHT", 10, 0)
+
+local posYLabel = posRow:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+posYLabel:SetPoint("LEFT", posX, "RIGHT", 10, 0)
+posYLabel:SetText("Y")
+
+local posY = CreateInputBox(posRow, 55, true)
+posY:SetPoint("LEFT", posYLabel, "RIGHT", 10, 0)
+
+local function ApplyPosition()
+    local x = ParseInteger(posX:GetText())
+    local y = ParseInteger(posY:GetText())
+    if x and y then
+        CPC.SetFramePosition(x, y)
+    end
+end
+
+posX:SetScript("OnEnterPressed", function(self) ApplyPosition(); self:ClearFocus() end)
+posY:SetScript("OnEnterPressed", function(self) ApplyPosition(); self:ClearFocus() end)
+
+local applyPos = CreateFrame("Button", nil, posRow, "UIPanelButtonTemplate")
+applyPos:SetSize(RESET_WIDTH, 22)
+applyPos:SetPoint("LEFT", posY, "RIGHT", 8, 0)
+applyPos:SetText("Apply")
+applyPos:SetScript("OnClick", ApplyPosition)
+
+CreateResetButton(posRow, applyPos, 4, function()
+    CPC.SetFramePosition(DEFAULTS.x, DEFAULTS.y)
+end)
+
+--========================================================--
+-- Appearance
+--========================================================--
+AddSection("Appearance")
+
+local BORDER_ATLAS_LABELS = {
+    ["ChallengeMode-KeystoneSlotFrameGlow"] = "Glow 1",
+    ["ChallengeMode-KeystoneSlotFrame"] = "Ornate",
+    ["lemixArtifact-node-circle-glw-FX"] = "Glow 2",
+    ["dragonflight-landingbutton-circlehighlight"] = "Container",
+    ["services-cover-ring"] = "Ring",
+    ["talents-node-circle-sheenmask"] = "Solid Color",
+}
+
+-- Same dropdown-with-arrows control the Blizzard settings list uses
+local borderRow = AddRow("Border")
+local borderControl = CreateFrame("Frame", nil, borderRow, "SettingsDropdownWithButtonsTemplate")
+borderControl:SetWidth(SLIDER_WIDTH)
+PlaceControl(borderRow, borderControl)
+local borderDropdown = borderControl.Dropdown
+
+local function IsBorderSelected(atlas)
+    return ComboPointCounterDB.borderAtlas == atlas
+end
+
+borderDropdown:SetupMenu(function(_, rootDescription)
+    for _, atlas in ipairs(CPC.BORDER_ATLAS_CHOICES) do
+        rootDescription:CreateRadio(BORDER_ATLAS_LABELS[atlas] or atlas, IsBorderSelected, CPC.SetBorderAtlas, atlas)
+    end
+end)
+
+local function GetBorderIndex()
+    for i, atlas in ipairs(CPC.BORDER_ATLAS_CHOICES) do
+        if atlas == ComboPointCounterDB.borderAtlas then
+            return i
+        end
+    end
+    return 1
+end
+
+local function StepBorder(delta)
+    local atlas = CPC.BORDER_ATLAS_CHOICES[GetBorderIndex() + delta]
+    if atlas then
+        CPC.SetBorderAtlas(atlas)
+    end
+end
+
+borderControl.DecrementButton:SetScript("OnClick", function() StepBorder(-1) end)
+borderControl.IncrementButton:SetScript("OnClick", function() StepBorder(1) end)
+
+-- Same gap as the slider rows so the Reset buttons line up
+CreateResetButton(borderRow, borderControl, 40, function()
+    CPC.SetBorderAtlas(DEFAULTS.borderAtlas)
+end)
+
+local function UpdateBorderControl()
+    local index = GetBorderIndex()
+    borderDropdown:GenerateMenu()
+    borderControl.DecrementButton:SetEnabled(index > 1)
+    borderControl.IncrementButton:SetEnabled(index < #CPC.BORDER_ATLAS_CHOICES)
+end
+
+local thresholdRow = AddRow("Finisher Threshold")
+local thresholdSlider = CreateSlider(thresholdRow, 1, 7, CPC.SetFinisherThreshold)
+CreateResetButton(thresholdRow, thresholdSlider, 40, function()
+    CPC.SetFinisherThreshold(DEFAULTS.finisherThreshold)
+end)
 
 -- Keys match the color tables in CPC.DEFAULTS. Swatches are refreshed by
 -- RefreshAllOptions, which every setter triggers while the panel is open.
@@ -390,86 +436,48 @@ local COLOR_ROWS = {
 }
 
 local colorRows, colorButtons = {}, {}
-local rowAnchor, rowOffset = thresholdSlider, -18
 
 for _, info in ipairs(COLOR_ROWS) do
     local key = info.key
-    local row, button = CreateColorRow(info.label, rowAnchor, rowOffset, function()
+    local row = AddRow(info.label)
+    local button = CreateColorSwatch(row, function()
         local r, g, b, a = CPC.GetColor(key)
         ShowColorPicker(r, g, b, a, function(nr, ng, nb, na)
             CPC.SetColor(key, nr, ng, nb, na)
         end)
-    end, function()
+    end)
+    CreateResetButton(row, button, 8, function()
         local c = DEFAULTS[key]
         CPC.SetColor(key, c.r, c.g, c.b, c.a)
     end)
 
     colorRows[key] = row
     colorButtons[key] = button
-    rowAnchor, rowOffset = row, -6
 end
 
 local borderTintRow = colorRows.borderTint
 borderTintRow:Hide()
 
-local borderAtlasDropdownInitialized = false
-local UpdateContentHeight
-
-local function UpdateBorderAtlasDropdownText()
-    local selected = ComboPointCounterDB.borderAtlas
-    UIDropDownMenu_SetText(borderAtlasDropdown, BORDER_ATLAS_LABELS[selected] or selected)
-end
-
 local function UpdateBorderTintVisibility()
-    borderTintRow:SetShown(ComboPointCounterDB.borderAtlas == CPC.BORDER_TINT_ATLAS)
-    UpdateContentHeight()
-end
-
-local function InitializeBorderAtlasDropdown()
-    if borderAtlasDropdownInitialized then
-        return
+    local shown = ComboPointCounterDB.borderAtlas == CPC.BORDER_TINT_ATLAS
+    if borderTintRow:IsShown() ~= shown then
+        borderTintRow:SetShown(shown)
+        LayoutRows()
     end
-
-    UIDropDownMenu_Initialize(borderAtlasDropdown, function(_, level)
-        if level ~= 1 then
-            return
-        end
-
-        local selected = ComboPointCounterDB.borderAtlas
-        for _, atlas in ipairs(CPC.BORDER_ATLAS_CHOICES) do
-            local info = UIDropDownMenu_CreateInfo()
-            info.text = BORDER_ATLAS_LABELS[atlas] or atlas
-            info.func = function()
-                CPC.SetBorderAtlas(atlas)
-            end
-            info.checked = (atlas == selected)
-            UIDropDownMenu_AddButton(info, level)
-        end
-    end)
-
-    borderAtlasDropdownInitialized = true
 end
 
 --========================================================--
--- Debug / Force Number Controls
+-- Digit Adjustment
 --========================================================--
-local debugHeader = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-debugHeader:SetText("Digit Adjustment")
+AddSection("Digit Adjustment")
 
-local debugLabel = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-debugLabel:SetPoint("TOPLEFT", debugHeader, "BOTTOMLEFT", 0, -12)
-debugLabel:SetText("Force Number")
+local debugRow = AddRow("Force Number", COMPACT_ROW_HEIGHT)
+local debugCheck = CreateCheckbox(debugRow)
+PlaceControl(debugRow, debugCheck)
 
-local debugCheck = CreateFrame("CheckButton", nil, content, "InterfaceOptionsCheckButtonTemplate")
-debugCheck:SetPoint("LEFT", debugLabel, "RIGHT", 6, -1)
-
-local debugBox = CreateFrame("EditBox", nil, content, "InputBoxTemplate")
-debugBox:SetSize(40, 20)
-debugBox:SetPoint("LEFT", debugCheck, "RIGHT", 6, 1)
-debugBox:SetAutoFocus(false)
-SetIntegerInputFilter(debugBox, false)
+local debugBox = CreateInputBox(debugRow, 40, false)
+debugBox:SetPoint("LEFT", debugCheck, "RIGHT", 10, 0)
 debugBox:EnableMouseWheel(false)
-RegisterTabBox(debugBox)
 
 debugBox:SetScript("OnEditFocusGained", function(self)
     self:HighlightText()
@@ -504,31 +512,13 @@ debugBox:SetScript("OnEnterPressed", function(self)
     self:ClearFocus()
 end)
 
---========================================================--
--- Number Offset Controls
---========================================================--
 local offsetBoxes = {}
 
 for i = 0, 7 do
-    local row = CreateFrame("Frame", nil, content)
-    row:SetSize(200, 20)
-
-    if i == 0 then
-        row:SetPoint("TOPLEFT", debugLabel, "BOTTOMLEFT", 0, -8)
-    else
-        row:SetPoint("TOPLEFT", offsetBoxes[i - 1], "BOTTOMLEFT", 0, -4)
-    end
-
-    local label = row:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    label:SetPoint("LEFT")
-    label:SetText("Offset " .. i)
-
-    local box = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
-    box:SetSize(40, 20)
-    box:SetPoint("LEFT", row, "LEFT", OFFSET_INPUT_X, 0)
-    box:SetAutoFocus(false)
-    SetIntegerInputFilter(box, true)
-    RegisterTabBox(box)
+    local row = AddRow("Offset " .. i, COMPACT_ROW_HEIGHT)
+    local box = CreateInputBox(row, 40, true)
+    -- InputBoxTemplate art extends left of the frame, so nudge it to line up with the other controls
+    box:SetPoint("LEFT", row, "CENTER", CONTROL_OFFSET + 6, 0)
 
     box:SetScript("OnEnterPressed", function(self)
         local v = ParseInteger(self:GetText()) or 0
@@ -537,34 +527,14 @@ for i = 0, 7 do
         self:ClearFocus()
     end)
 
-    row.box = box
-    offsetBoxes[i] = row
+    offsetBoxes[i] = box
 end
 
-local function LayoutDigitAdjustment()
-    local offset = GetDigitColumnOffset()
-
-    debugHeader:ClearAllPoints()
-    debugHeader:SetPoint("TOPLEFT", sizeHeader, "TOPLEFT", offset, 0)
-
-    debugLabel:ClearAllPoints()
-    debugLabel:SetPoint("TOPLEFT", debugHeader, "BOTTOMLEFT", 0, -12)
-end
+LayoutRows()
 
 --========================================================--
 -- Unified Refresh
 --========================================================--
-UpdateContentHeight = function()
-    local lastColorRow = borderTintRow:IsShown() and borderTintRow or colorRows.finisherNumberColor
-    local top = content:GetTop()
-    local offsetBottom = offsetBoxes[7]:GetBottom()
-    local colorBottom = lastColorRow:GetBottom()
-    if not top or not offsetBottom or not colorBottom then return end
-
-    local height = top - math.min(offsetBottom, colorBottom) + 20
-    content:SetHeight(math.max(height, 1))
-end
-
 function CPC.RefreshAllOptions()
     local db = ComboPointCounterDB
     refreshing = true
@@ -572,7 +542,6 @@ function CPC.RefreshAllOptions()
     alwaysShow:SetChecked(db.alwaysShow)
 
     sizeSlider:SetValue(db.size)
-    sizeBox:SetText(tostring(db.size))
 
     posX:SetText(db.x)
     posY:SetText(db.y)
@@ -580,12 +549,10 @@ function CPC.RefreshAllOptions()
     for key, button in pairs(colorButtons) do
         button.swatch:SetColorTexture(CPC.GetColor(key))
     end
-    InitializeBorderAtlasDropdown()
-    UpdateBorderAtlasDropdownText()
+    UpdateBorderControl()
     UpdateBorderTintVisibility()
 
     thresholdSlider:SetValue(db.finisherThreshold)
-    thresholdBox:SetText(tostring(db.finisherThreshold))
 
     local debugEnabled = db.debugValue ~= nil
     debugCheck:SetChecked(debugEnabled)
@@ -593,19 +560,10 @@ function CPC.RefreshAllOptions()
     SetDebugBoxEnabled(debugEnabled)
 
     for i = 0, 7 do
-        offsetBoxes[i].box:SetText(db.textOffsets[i])
+        offsetBoxes[i]:SetText(db.textOffsets[i])
     end
 
     refreshing = false
 end
 
-panel:SetScript("OnShow", function()
-    LayoutDigitAdjustment()
-    CPC.RefreshAllOptions()
-    UpdateContentHeight()
-end)
-
-scrollFrame:HookScript("OnSizeChanged", function()
-    LayoutDigitAdjustment()
-    UpdateContentHeight()
-end)
+panel:SetScript("OnShow", CPC.RefreshAllOptions)

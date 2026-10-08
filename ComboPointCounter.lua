@@ -273,9 +273,6 @@ function CPC.SetAlwaysShow(value)
 end
 
 function CPC.SetFrameSize(size)
-    size = tonumber(size)
-    if not size or size <= 0 then return end
-
     ComboPointCounterDB.size = size
     frame:SetSize(size, size)
     UpdateBorderSize()
@@ -309,13 +306,6 @@ function CPC.SetTextOffset(index, value)
 end
 
 function CPC.SetFinisherThreshold(value)
-    value = tonumber(value)
-    if not value then return end
-
-    value = math.floor(value + 0.5)
-    if value < 1 then value = 1 end
-    if value > 7 then value = 7 end
-
     ComboPointCounterDB.finisherThreshold = value
     UpdateCounter()
     CPC.NotifyOptions()

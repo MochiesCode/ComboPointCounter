@@ -3,22 +3,6 @@ Displays the number of combo points you have. When in finisher range the backgro
 
 ![CPCclip-ezgif com-crop](https://github.com/user-attachments/assets/29e5d0fb-8f46-4a86-8302-27f327a564ee)
 
-Commands:
-
-/cpc options --Opens options window
-
-/cpc show --Forces the frame to always be visible
-
-/cpc combat --Forces the frame to only be visible in combat (default behavior)
-
-/cpc size <#>  --Sets the size of the frame (ex: /cpc size 25)
-
-/cpc pos <#> <#> --Sets the frame position to a specific x/y coordinate (ex: /cpc 387 -19)
-
-/cpc offset <#> <#> --Offsets a particular digit left or right inside the frame (ex: /cpc 3 -2   --  3 is the combo point, -2 is the offset)
-
-/cpc debug <#> --Forces a specific number to display (ex: /cpc debug 4)
-
-/cpc debug off --Returns to displaying actual number of combo points
+/cpc --Opens options window
 
 Hold shift and left click to drag move the frame

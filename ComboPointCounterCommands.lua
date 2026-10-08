@@ -1,8 +1,7 @@
--- Only load if player is a supported class
-local _, class = UnitClass("player")
-if class ~= "ROGUE" and class ~= "DRUID" then return end
-
 local addonName, CPC = ...
+
+-- Main file bails out for unsupported classes before creating the frame
+if not CPC.frame then return end
 
 local function Tokenize(msg)
     local t = {}
@@ -15,40 +14,23 @@ end
 local Commands = {}
 
 local function OpenOptionsPanel()
-    if InCombatLockdown and InCombatLockdown() then
-        return false
-    end
-
-    if Settings and Settings.OpenToCategory and CPC.OptionsCategory and CPC.OptionsCategory.GetID then
-        Settings.OpenToCategory(CPC.OptionsCategory:GetID())
-        return true
-    end
-
-    if InterfaceOptionsFrame_OpenToCategory and CPC.OptionsPanel then
-        InterfaceOptionsFrame_OpenToCategory(CPC.OptionsPanel)
-        InterfaceOptionsFrame_OpenToCategory(CPC.OptionsPanel)
-        return true
-    end
-
-    return false
+    Settings.OpenToCategory(CPC.OptionsCategory:GetID())
 end
 
-local pendingOpen = false
+-- Only listens for combat ending while an open is waiting
 local openFrame = CreateFrame("Frame")
-openFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-openFrame:SetScript("OnEvent", function()
-    if pendingOpen then
-        pendingOpen = false
-        OpenOptionsPanel()
-    end
+openFrame:SetScript("OnEvent", function(self)
+    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    OpenOptionsPanel()
 end)
 
 Commands.options = function()
-    if OpenOptionsPanel() then
+    if not InCombatLockdown() then
+        OpenOptionsPanel()
         return
     end
 
-    pendingOpen = true
+    openFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
     print("Combo Point Counter: options can't open in combat. They will open when combat ends.")
 end
 

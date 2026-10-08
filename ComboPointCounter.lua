@@ -20,10 +20,11 @@ for _, atlas in ipairs(BORDER_ATLAS_CHOICES) do
 end
 
 local DEFAULT_BORDER_ATLAS = BORDER_ATLAS_CHOICES[1]
-CPC.BORDER_ATLAS_CHOICES = BORDER_ATLAS_CHOICES
 local BORDER_TINT_ATLAS = "talents-node-circle-sheenmask"
-local DEFAULT_NUMBER_COLOR = { r = 1, g = 0.82, b = 0, a = 1 }
-local DEFAULT_FINISHER_NUMBER_COLOR = { r = 1, g = 1, b = 1, a = 1 }
+CPC.BORDER_ATLAS_CHOICES = BORDER_ATLAS_CHOICES
+CPC.BORDER_ATLAS_LOOKUP = BORDER_ATLAS_LOOKUP
+CPC.BORDER_TINT_ATLAS = BORDER_TINT_ATLAS
+
 local SMALL_BORDER_SCALE = 0.6
 local SLIGHTLY_LARGER_SMALL_SCALE = SMALL_BORDER_SCALE * 1.05
 local TINT_BORDER_SCALE = 0.84
@@ -42,45 +43,44 @@ local BORDER_X_OFFSET_BY_ATLAS = {
 }
 
 local BASE_FONT, BASE_FONT_SIZE, BASE_FONT_FLAGS = GameFontNormalLarge:GetFont()
+local CAT_FORM_ID = CAT_FORM or 1
 
--- Saved variables
-ComboPointCounterDB = ComboPointCounterDB or {}
-ComboPointCounterDB.alwaysShow = ComboPointCounterDB.alwaysShow or false
-ComboPointCounterDB.debugValue = ComboPointCounterDB.debugValue or nil
-ComboPointCounterDB.point = ComboPointCounterDB.point or "CENTER"
-ComboPointCounterDB.x = ComboPointCounterDB.x or 0
-ComboPointCounterDB.y = ComboPointCounterDB.y or 0
-ComboPointCounterDB.size = ComboPointCounterDB.size or 25
-ComboPointCounterDB.textOffsets = ComboPointCounterDB.textOffsets or {}
-for i = 0, 7 do
-    ComboPointCounterDB.textOffsets[i] = ComboPointCounterDB.textOffsets[i] or 0
+--========================================================--
+-- Saved Variables
+--========================================================--
+local DEFAULTS = {
+    alwaysShow = false,
+    point = "CENTER",
+    x = 0,
+    y = 0,
+    size = 25,
+    textOffsets = { [0] = 0, 0, 0, 0, 0, 0, 0, 0 },
+    finisherThreshold = 6,
+    backgroundColor = { r = 0, g = 0, b = 0, a = 0.6 },
+    finisherColor = { r = 0.75, g = 0.5, b = 0, a = 1 },
+    numberColor = { r = 1, g = 0.82, b = 0, a = 1 },
+    finisherNumberColor = { r = 1, g = 1, b = 1, a = 1 },
+    borderTint = { r = 1, g = 1, b = 1, a = 1 },
+    borderAtlas = DEFAULT_BORDER_ATLAS,
+}
+CPC.DEFAULTS = DEFAULTS
+
+-- Fills in any missing keys without overwriting saved values
+local function ApplyDefaults(db, defaults)
+    for key, value in pairs(defaults) do
+        if type(value) == "table" then
+            if type(db[key]) ~= "table" then
+                db[key] = {}
+            end
+            ApplyDefaults(db[key], value)
+        elseif db[key] == nil then
+            db[key] = value
+        end
+    end
 end
-ComboPointCounterDB.backgroundColor = ComboPointCounterDB.backgroundColor or {}
-ComboPointCounterDB.backgroundColor.r = ComboPointCounterDB.backgroundColor.r or 0
-ComboPointCounterDB.backgroundColor.g = ComboPointCounterDB.backgroundColor.g or 0
-ComboPointCounterDB.backgroundColor.b = ComboPointCounterDB.backgroundColor.b or 0
-ComboPointCounterDB.backgroundColor.a = ComboPointCounterDB.backgroundColor.a or 0.6
-ComboPointCounterDB.finisherThreshold = ComboPointCounterDB.finisherThreshold or 6
-ComboPointCounterDB.finisherColor = ComboPointCounterDB.finisherColor or {}
-ComboPointCounterDB.finisherColor.r = ComboPointCounterDB.finisherColor.r or 0.75
-ComboPointCounterDB.finisherColor.g = ComboPointCounterDB.finisherColor.g or 0.5
-ComboPointCounterDB.finisherColor.b = ComboPointCounterDB.finisherColor.b or 0
-ComboPointCounterDB.finisherColor.a = ComboPointCounterDB.finisherColor.a or 1
-ComboPointCounterDB.numberColor = ComboPointCounterDB.numberColor or {}
-ComboPointCounterDB.numberColor.r = ComboPointCounterDB.numberColor.r or DEFAULT_NUMBER_COLOR.r
-ComboPointCounterDB.numberColor.g = ComboPointCounterDB.numberColor.g or DEFAULT_NUMBER_COLOR.g
-ComboPointCounterDB.numberColor.b = ComboPointCounterDB.numberColor.b or DEFAULT_NUMBER_COLOR.b
-ComboPointCounterDB.numberColor.a = ComboPointCounterDB.numberColor.a or DEFAULT_NUMBER_COLOR.a
-ComboPointCounterDB.finisherNumberColor = ComboPointCounterDB.finisherNumberColor or {}
-ComboPointCounterDB.finisherNumberColor.r = ComboPointCounterDB.finisherNumberColor.r or DEFAULT_FINISHER_NUMBER_COLOR.r
-ComboPointCounterDB.finisherNumberColor.g = ComboPointCounterDB.finisherNumberColor.g or DEFAULT_FINISHER_NUMBER_COLOR.g
-ComboPointCounterDB.finisherNumberColor.b = ComboPointCounterDB.finisherNumberColor.b or DEFAULT_FINISHER_NUMBER_COLOR.b
-ComboPointCounterDB.finisherNumberColor.a = ComboPointCounterDB.finisherNumberColor.a or DEFAULT_FINISHER_NUMBER_COLOR.a
-ComboPointCounterDB.borderTint = ComboPointCounterDB.borderTint or {}
-ComboPointCounterDB.borderTint.r = ComboPointCounterDB.borderTint.r or 1
-ComboPointCounterDB.borderTint.g = ComboPointCounterDB.borderTint.g or 1
-ComboPointCounterDB.borderTint.b = ComboPointCounterDB.borderTint.b or 1
-ComboPointCounterDB.borderTint.a = ComboPointCounterDB.borderTint.a or 1
+
+ComboPointCounterDB = ComboPointCounterDB or {}
+ApplyDefaults(ComboPointCounterDB, DEFAULTS)
 if not BORDER_ATLAS_LOOKUP[ComboPointCounterDB.borderAtlas] then
     ComboPointCounterDB.borderAtlas = DEFAULT_BORDER_ATLAS
 end
@@ -89,7 +89,7 @@ end
 -- Options Sync
 --========================================================--
 function CPC.NotifyOptions()
-    if CPC.OptionsPanel and CPC.OptionsPanel:IsShown() and CPC.RefreshAllOptions then
+    if CPC.OptionsPanel and CPC.OptionsPanel:IsShown() then
         CPC.RefreshAllOptions()
     end
 end
@@ -142,12 +142,8 @@ fill:AddMaskTexture(mask)
 local border = frame:CreateTexture(nil, "BORDER")
 border:SetPoint("CENTER")
 border:SetAtlas(ComboPointCounterDB.borderAtlas)
-if border.SetSnapToPixelGrid then
-    border:SetSnapToPixelGrid(false)
-end
-if border.SetTexelSnappingBias then
-    border:SetTexelSnappingBias(0)
-end
+border:SetSnapToPixelGrid(false)
+border:SetTexelSnappingBias(0)
 
 --========================================================--
 -- Counter Text
@@ -161,9 +157,6 @@ text:SetShadowColor(0, 0, 0, 0.8)
 -- Core Update Functions
 --========================================================--
 local function ClampChannel(value, fallback)
-    if value == nil then
-        return fallback
-    end
     value = tonumber(value)
     if not value then
         return fallback
@@ -173,13 +166,14 @@ local function ClampChannel(value, fallback)
     return value
 end
 
-local function ApplyFillColor(comboPoint)
-    local threshold = ComboPointCounterDB.finisherThreshold or 6
-    local color = comboPoint >= threshold and ComboPointCounterDB.finisherColor or ComboPointCounterDB.backgroundColor
-    fill:SetColorTexture(color.r, color.g, color.b, color.a)
+local function ApplyColors(comboPoint)
+    local db = ComboPointCounterDB
+    local isFinisher = comboPoint >= db.finisherThreshold
+    local fillColor = isFinisher and db.finisherColor or db.backgroundColor
+    local numberColor = isFinisher and db.finisherNumberColor or db.numberColor
+    fill:SetColorTexture(fillColor.r, fillColor.g, fillColor.b, fillColor.a)
+    text:SetTextColor(numberColor.r, numberColor.g, numberColor.b, numberColor.a)
 end
-
-local ApplyNumberColor -- forward declared; defined below, called from UpdateCounter
 
 local updatePending = false
 
@@ -192,8 +186,7 @@ local function DoUpdateCounter()
     local xOffset = ComboPointCounterDB.textOffsets[comboPoint] or 0
     text:SetPoint("CENTER", frame, "CENTER", xOffset, 0)
 
-    ApplyFillColor(comboPoint)
-    ApplyNumberColor(comboPoint)
+    ApplyColors(comboPoint)
 end
 
 -- Delayed by a frame because it doesn't always update offsets correctly if I don't.
@@ -205,34 +198,8 @@ local function UpdateCounter()
 end
 CPC.UpdateCounter = UpdateCounter
 
-local function IsDruidCatForm()
-    if class ~= "DRUID" then
-        return false
-    end
-
-    if not GetShapeshiftForm then
-        return false
-    end
-
-    local currentForm = GetShapeshiftForm()
-    if not currentForm or currentForm == 0 then
-        return false
-    end
-
-    if GetShapeshiftFormID and CAT_FORM then
-        return GetShapeshiftFormID() == CAT_FORM
-    end
-
-    local _, powerTypeToken = UnitPowerType("player")
-    return powerTypeToken == "ENERGY"
-end
-
 local function IsDisplaySupported()
-    if class == "ROGUE" then
-        return true
-    end
-
-    return IsDruidCatForm()
+    return class == "ROGUE" or GetShapeshiftFormID() == CAT_FORM_ID
 end
 
 local function UpdateVisibility()
@@ -254,15 +221,6 @@ local function UpdateFontSize()
     local scale = ComboPointCounterDB.size / BASE_FRAME_SIZE
     local fontSize = math.floor(BASE_FONT_SIZE * scale + 0.5)
     text:SetFont(BASE_FONT, fontSize, BASE_FONT_FLAGS)
-end
-
-ApplyNumberColor = function(comboPoint)
-    if comboPoint == nil then
-        comboPoint = ComboPointCounterDB.debugValue or UnitPower("player", Enum.PowerType.ComboPoints) or 0
-    end
-    local threshold = ComboPointCounterDB.finisherThreshold or 6
-    local c = (comboPoint >= threshold) and ComboPointCounterDB.finisherNumberColor or ComboPointCounterDB.numberColor
-    text:SetTextColor(c.r, c.g, c.b, c.a)
 end
 
 local function UpdateBorderSize()
@@ -291,10 +249,6 @@ end
 
 local function ApplyBorderAtlas()
     local atlas = ComboPointCounterDB.borderAtlas
-    if not BORDER_ATLAS_LOOKUP[atlas] then
-        atlas = DEFAULT_BORDER_ATLAS
-        ComboPointCounterDB.borderAtlas = atlas
-    end
 
     border:ClearAllPoints()
     border:SetPoint(
@@ -342,10 +296,6 @@ function CPC.SetFramePosition(x, y)
     CPC.NotifyOptions()
 end
 
-function CPC.GetFramePosition()
-    return ComboPointCounterDB.x or 0, ComboPointCounterDB.y or 0
-end
-
 function CPC.SetDebugValue(value)
     ComboPointCounterDB.debugValue = value
     UpdateCounter()
@@ -356,21 +306,6 @@ function CPC.SetTextOffset(index, value)
     ComboPointCounterDB.textOffsets[index] = value or 0
     UpdateCounter()
     CPC.NotifyOptions()
-end
-
-function CPC.SetBackgroundColor(r, g, b, a)
-    local c = ComboPointCounterDB.backgroundColor
-    c.r = ClampChannel(r, c.r)
-    c.g = ClampChannel(g, c.g)
-    c.b = ClampChannel(b, c.b)
-    c.a = ClampChannel(a, c.a)
-    UpdateCounter()
-    CPC.NotifyOptions()
-end
-
-function CPC.GetBackgroundColor()
-    local c = ComboPointCounterDB.backgroundColor
-    return c.r, c.g, c.b, c.a
 end
 
 function CPC.SetFinisherThreshold(value)
@@ -386,67 +321,25 @@ function CPC.SetFinisherThreshold(value)
     CPC.NotifyOptions()
 end
 
-function CPC.GetFinisherThreshold()
-    return ComboPointCounterDB.finisherThreshold or 6
-end
+-- Colors that need something other than UpdateCounter to redraw
+local COLOR_APPLIERS = {
+    borderTint = ApplyBorderTint,
+}
 
-function CPC.SetFinisherColor(r, g, b, a)
-    local c = ComboPointCounterDB.finisherColor
+-- key is one of the color tables in DEFAULTS (backgroundColor, borderTint, ...)
+function CPC.SetColor(key, r, g, b, a)
+    local c = ComboPointCounterDB[key]
     c.r = ClampChannel(r, c.r)
     c.g = ClampChannel(g, c.g)
     c.b = ClampChannel(b, c.b)
     c.a = ClampChannel(a, c.a)
-    UpdateCounter()
+    local apply = COLOR_APPLIERS[key] or UpdateCounter
+    apply()
     CPC.NotifyOptions()
 end
 
-function CPC.GetFinisherColor()
-    local c = ComboPointCounterDB.finisherColor
-    return c.r, c.g, c.b, c.a
-end
-
-function CPC.SetNumberColor(r, g, b, a)
-    local c = ComboPointCounterDB.numberColor
-    c.r = ClampChannel(r, c.r)
-    c.g = ClampChannel(g, c.g)
-    c.b = ClampChannel(b, c.b)
-    c.a = ClampChannel(a, c.a)
-    ApplyNumberColor()
-    CPC.NotifyOptions()
-end
-
-function CPC.GetNumberColor()
-    local c = ComboPointCounterDB.numberColor
-    return c.r, c.g, c.b, c.a
-end
-
-function CPC.SetFinisherNumberColor(r, g, b, a)
-    local c = ComboPointCounterDB.finisherNumberColor
-    c.r = ClampChannel(r, c.r)
-    c.g = ClampChannel(g, c.g)
-    c.b = ClampChannel(b, c.b)
-    c.a = ClampChannel(a, c.a)
-    ApplyNumberColor()
-    CPC.NotifyOptions()
-end
-
-function CPC.GetFinisherNumberColor()
-    local c = ComboPointCounterDB.finisherNumberColor
-    return c.r, c.g, c.b, c.a
-end
-
-function CPC.SetBorderTint(r, g, b, a)
-    local c = ComboPointCounterDB.borderTint
-    c.r = ClampChannel(r, c.r)
-    c.g = ClampChannel(g, c.g)
-    c.b = ClampChannel(b, c.b)
-    c.a = ClampChannel(a, c.a)
-    ApplyBorderTint()
-    CPC.NotifyOptions()
-end
-
-function CPC.GetBorderTint()
-    local c = ComboPointCounterDB.borderTint
+function CPC.GetColor(key)
+    local c = ComboPointCounterDB[key]
     return c.r, c.g, c.b, c.a
 end
 
@@ -460,28 +353,17 @@ function CPC.SetBorderAtlas(atlas)
     CPC.NotifyOptions()
 end
 
-function CPC.GetBorderAtlas()
-    local atlas = ComboPointCounterDB.borderAtlas
-    if BORDER_ATLAS_LOOKUP[atlas] then
-        return atlas
-    end
-
-    return DEFAULT_BORDER_ATLAS
-end
-
 --========================================================--
 -- Event Handling
 --========================================================--
 local function HandleEvent(self, event, unit, powerType)
-    if event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_ENTERING_WORLD"
-        or event == "UPDATE_SHAPESHIFT_FORM"
-    then
-        UpdateVisibility()
-    elseif event == "UNIT_POWER_UPDATE" then
+    if event == "UNIT_POWER_UPDATE" then
         -- Hidden frames get refreshed by UpdateVisibility when they're shown
         if powerType == "COMBO_POINTS" and frame:IsShown() then
             UpdateCounter()
         end
+    else
+        UpdateVisibility()
     end
 end
 
@@ -495,6 +377,5 @@ end
 frame:SetScript("OnEvent", HandleEvent)
 
 ApplyBorderAtlas()
-ApplyNumberColor()
-UpdateVisibility()
 UpdateFontSize()
+UpdateVisibility()

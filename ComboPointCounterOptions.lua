@@ -1,50 +1,9 @@
--- Only load if player is a supported class
-local _, class = UnitClass("player")
-if class ~= "ROGUE" and class ~= "DRUID" then return end
-
 local addonName, CPC = ...
 
---========================================================--
--- Ensure saved variables are initialized
---========================================================--
-ComboPointCounterDB = ComboPointCounterDB or {}
-ComboPointCounterDB.alwaysShow = ComboPointCounterDB.alwaysShow or false
-ComboPointCounterDB.debugValue = ComboPointCounterDB.debugValue or nil
-ComboPointCounterDB.point = ComboPointCounterDB.point or "CENTER"
-ComboPointCounterDB.x = ComboPointCounterDB.x or 0
-ComboPointCounterDB.y = ComboPointCounterDB.y or 0
-ComboPointCounterDB.size = ComboPointCounterDB.size or 25
-ComboPointCounterDB.textOffsets = ComboPointCounterDB.textOffsets or {}
-for i = 0, 7 do
-    ComboPointCounterDB.textOffsets[i] = ComboPointCounterDB.textOffsets[i] or 0
-end
-ComboPointCounterDB.backgroundColor = ComboPointCounterDB.backgroundColor or {}
-ComboPointCounterDB.backgroundColor.r = ComboPointCounterDB.backgroundColor.r or 0
-ComboPointCounterDB.backgroundColor.g = ComboPointCounterDB.backgroundColor.g or 0
-ComboPointCounterDB.backgroundColor.b = ComboPointCounterDB.backgroundColor.b or 0
-ComboPointCounterDB.backgroundColor.a = ComboPointCounterDB.backgroundColor.a or 0.6
-ComboPointCounterDB.finisherThreshold = ComboPointCounterDB.finisherThreshold or 6
-ComboPointCounterDB.finisherColor = ComboPointCounterDB.finisherColor or {}
-ComboPointCounterDB.finisherColor.r = ComboPointCounterDB.finisherColor.r or 0.75
-ComboPointCounterDB.finisherColor.g = ComboPointCounterDB.finisherColor.g or 0.5
-ComboPointCounterDB.finisherColor.b = ComboPointCounterDB.finisherColor.b or 0
-ComboPointCounterDB.finisherColor.a = ComboPointCounterDB.finisherColor.a or 1
-ComboPointCounterDB.numberColor = ComboPointCounterDB.numberColor or {}
-ComboPointCounterDB.numberColor.r = ComboPointCounterDB.numberColor.r or 1
-ComboPointCounterDB.numberColor.g = ComboPointCounterDB.numberColor.g or 0.82
-ComboPointCounterDB.numberColor.b = ComboPointCounterDB.numberColor.b or 0
-ComboPointCounterDB.numberColor.a = ComboPointCounterDB.numberColor.a or 1
-ComboPointCounterDB.finisherNumberColor = ComboPointCounterDB.finisherNumberColor or {}
-ComboPointCounterDB.finisherNumberColor.r = ComboPointCounterDB.finisherNumberColor.r or 1
-ComboPointCounterDB.finisherNumberColor.g = ComboPointCounterDB.finisherNumberColor.g or 1
-ComboPointCounterDB.finisherNumberColor.b = ComboPointCounterDB.finisherNumberColor.b or 1
-ComboPointCounterDB.finisherNumberColor.a = ComboPointCounterDB.finisherNumberColor.a or 1
-ComboPointCounterDB.borderTint = ComboPointCounterDB.borderTint or {}
-ComboPointCounterDB.borderTint.r = ComboPointCounterDB.borderTint.r or 1
-ComboPointCounterDB.borderTint.g = ComboPointCounterDB.borderTint.g or 1
-ComboPointCounterDB.borderTint.b = ComboPointCounterDB.borderTint.b or 1
-ComboPointCounterDB.borderTint.a = ComboPointCounterDB.borderTint.a or 1
-ComboPointCounterDB.borderAtlas = ComboPointCounterDB.borderAtlas or "ChallengeMode-KeystoneSlotFrameGlow"
+-- Main file bails out for unsupported classes before creating the frame
+if not CPC.frame then return end
+
+local DEFAULTS = CPC.DEFAULTS
 
 --========================================================--
 -- Options Panel Registration
@@ -119,10 +78,6 @@ end
 
 local function ParseInteger(text)
     text = tostring(text or "")
-    if text == "" then
-        return nil
-    end
-
     if not text:match("^%-?%d+$") then
         return nil
     end
@@ -163,7 +118,7 @@ end
 --========================================================--
 local title = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 title:SetPoint("TOPLEFT", 16, -16)
-title:SetText("Combo Point Counter v1.3")
+title:SetText("Combo Point Counter v" .. (C_AddOns.GetAddOnMetadata(addonName, "Version") or "?"))
 
 local subtitle = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
@@ -181,15 +136,6 @@ local function GetDigitColumnOffset()
     return math.max(DIGIT_COLUMN_MIN_OFFSET, halfWidth)
 end
 
-local BORDER_ATLAS_CHOICES = CPC.BORDER_ATLAS_CHOICES or {
-    "ChallengeMode-KeystoneSlotFrameGlow",
-    "lemixArtifact-node-circle-glw-FX",
-    "ChallengeMode-KeystoneSlotFrame",
-    "dragonflight-landingbutton-circlehighlight",
-    "services-cover-ring",
-    "talents-node-circle-sheenmask",
-}
-
 local BORDER_ATLAS_LABELS = {
     ["ChallengeMode-KeystoneSlotFrameGlow"] = "Glow 1",
     ["ChallengeMode-KeystoneSlotFrame"] = "Ornate",
@@ -199,15 +145,9 @@ local BORDER_ATLAS_LABELS = {
     ["talents-node-circle-sheenmask"] = "Solid Color",
 }
 
-local BORDER_ATLAS_LOOKUP = {}
-for _, atlas in ipairs(BORDER_ATLAS_CHOICES) do
-    BORDER_ATLAS_LOOKUP[atlas] = true
-end
-
-local DEFAULT_BORDER_ATLAS = BORDER_ATLAS_CHOICES[1]
-if not BORDER_ATLAS_LOOKUP[ComboPointCounterDB.borderAtlas] then
-    ComboPointCounterDB.borderAtlas = DEFAULT_BORDER_ATLAS
-end
+-- Set while RefreshAllOptions syncs widgets, so programmatic SetValue calls
+-- don't feed clamped slider values back into the saved settings.
+local refreshing = false
 
 --========================================================--
 -- Visibility Options
@@ -244,10 +184,6 @@ sizeBox:SetAutoFocus(false)
 SetIntegerInputFilter(sizeBox, false)
 RegisterTabBox(sizeBox)
 
--- Set while RefreshAllOptions syncs widgets, so programmatic SetValue calls
--- don't feed clamped slider values back into the saved settings.
-local refreshing = false
-
 sizeSlider:SetScript("OnValueChanged", function(_, value)
     if refreshing then return end
     CPC.SetFrameSize(math.floor(value + 0.5))
@@ -266,7 +202,7 @@ resetSize:SetSize(80, 22)
 resetSize:SetPoint("LEFT", sizeBox, "RIGHT", 6, 0)
 resetSize:SetText("Reset")
 resetSize:SetScript("OnClick", function()
-    CPC.SetFrameSize(25)
+    CPC.SetFrameSize(DEFAULTS.size)
 end)
 
 --========================================================--
@@ -321,61 +257,31 @@ resetPos:SetSize(80, 22)
 resetPos:SetPoint("LEFT", posY, "RIGHT", 6, 0)
 resetPos:SetText("Reset")
 resetPos:SetScript("OnClick", function()
-    CPC.SetFramePosition(0, 0)
+    CPC.SetFramePosition(DEFAULTS.x, DEFAULTS.y)
 end)
 
 --========================================================--
 -- Color Controls
 --========================================================--
 local function ShowColorPicker(r, g, b, a, onChange)
-    a = a or 1
-
     local function ApplyNew()
         local nr, ng, nb = ColorPickerFrame:GetColorRGB()
         local na = ColorPickerFrame:GetColorAlpha() or 1
         onChange(nr, ng, nb, na)
     end
 
-    local function ApplyOld()
-        local nr, ng, nb = ColorPickerFrame:GetColorRGB()
-        local opacity = 1
-        if OpacitySliderFrame and OpacitySliderFrame.GetValue then
-            opacity = OpacitySliderFrame:GetValue()
-        elseif ColorPickerFrame.opacity ~= nil then
-            opacity = ColorPickerFrame.opacity
-        end
-        local na = 1 - opacity
-        onChange(nr, ng, nb, na)
-    end
-
-    if ColorPickerFrame.SetupColorPickerAndShow then
-        local pr, pg, pb, pa = r, g, b, a
-        ColorPickerFrame:SetupColorPickerAndShow({
-            r = r,
-            g = g,
-            b = b,
-            opacity = a,
-            hasOpacity = true,
-            swatchFunc = ApplyNew,
-            opacityFunc = ApplyNew,
-            cancelFunc = function()
-                onChange(pr, pg, pb, pa)
-            end,
-        })
-    else
-        ColorPickerFrame.hasOpacity = true
-        ColorPickerFrame.opacity = 1 - a
-        ColorPickerFrame.previousValues = { r = r, g = g, b = b, a = a }
-        ColorPickerFrame.func = ApplyOld
-        ColorPickerFrame.opacityFunc = ApplyOld
-        ColorPickerFrame.cancelFunc = function()
-            local prev = ColorPickerFrame.previousValues
-            onChange(prev.r, prev.g, prev.b, prev.a)
-        end
-        ColorPickerFrame:SetColorRGB(r, g, b)
-        ColorPickerFrame:Hide()
-        ColorPickerFrame:Show()
-    end
+    ColorPickerFrame:SetupColorPickerAndShow({
+        r = r,
+        g = g,
+        b = b,
+        opacity = a or 1,
+        hasOpacity = true,
+        swatchFunc = ApplyNew,
+        opacityFunc = ApplyNew,
+        cancelFunc = function()
+            onChange(r, g, b, a)
+        end,
+    })
 end
 
 local colorsHeader = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
@@ -391,13 +297,6 @@ borderAtlasDropdown:SetPoint("LEFT", borderAtlasLabel, "RIGHT", 4, -2)
 UIDropDownMenu_SetWidth(borderAtlasDropdown, 170)
 UIDropDownMenu_SetText(borderAtlasDropdown, "")
 
-local DEFAULT_BG_COLOR = { r = 0, g = 0, b = 0, a = 0.6 }
-local DEFAULT_FINISHER_COLOR = { r = 0.75, g = 0.5, b = 0, a = 1 }
-local DEFAULT_NUMBER_COLOR = { r = 1, g = 0.82, b = 0, a = 1 }
-local DEFAULT_FINISHER_NUMBER_COLOR = { r = 1, g = 1, b = 1, a = 1 }
-local DEFAULT_BORDER_TINT = { r = 1, g = 1, b = 1, a = 1 }
-local DEFAULT_FINISHER_THRESHOLD = 6
-local BORDER_TINT_ATLAS = "talents-node-circle-sheenmask"
 local COLOR_ROW_SWATCH_X = 170
 local COLOR_ROW_RESET_X = 200
 local OFFSET_INPUT_X = 70
@@ -443,7 +342,7 @@ resetThreshold:SetSize(80, 22)
 resetThreshold:SetPoint("LEFT", thresholdBox, "RIGHT", 6, 0)
 resetThreshold:SetText("Reset")
 resetThreshold:SetScript("OnClick", function()
-    CPC.SetFinisherThreshold(DEFAULT_FINISHER_THRESHOLD)
+    CPC.SetFinisherThreshold(DEFAULTS.finisherThreshold)
 end)
 
 local function CreateColorRow(labelText, anchor, yOffset, onPick, onReset)
@@ -477,46 +376,53 @@ local function CreateColorRow(labelText, anchor, yOffset, onPick, onReset)
     reset:SetText("Reset")
     reset:SetScript("OnClick", onReset)
 
-    return row, button, reset
+    return row, button
 end
 
-local defaultColorRow, defaultColorButton
-local finisherColorRow, finisherColorButton
-local numberColorRow, numberColorButton
-local finisherNumberColorRow, finisherNumberColorButton
-local borderTintRow, borderTintButton
+-- Keys match the color tables in CPC.DEFAULTS. Swatches are refreshed by
+-- RefreshAllOptions, which every setter triggers while the panel is open.
+local COLOR_ROWS = {
+    { key = "backgroundColor", label = "Background Tint" },
+    { key = "finisherColor", label = "Finisher Background Tint" },
+    { key = "numberColor", label = "Number Tint" },
+    { key = "finisherNumberColor", label = "Finisher Number Tint" },
+    { key = "borderTint", label = "Border Tint" },
+}
+
+local colorRows, colorButtons = {}, {}
+local rowAnchor, rowOffset = thresholdSlider, -18
+
+for _, info in ipairs(COLOR_ROWS) do
+    local key = info.key
+    local row, button = CreateColorRow(info.label, rowAnchor, rowOffset, function()
+        local r, g, b, a = CPC.GetColor(key)
+        ShowColorPicker(r, g, b, a, function(nr, ng, nb, na)
+            CPC.SetColor(key, nr, ng, nb, na)
+        end)
+    end, function()
+        local c = DEFAULTS[key]
+        CPC.SetColor(key, c.r, c.g, c.b, c.a)
+    end)
+
+    colorRows[key] = row
+    colorButtons[key] = button
+    rowAnchor, rowOffset = row, -6
+end
+
+local borderTintRow = colorRows.borderTint
+borderTintRow:Hide()
+
 local borderAtlasDropdownInitialized = false
 local UpdateContentHeight
 
-local function GetSelectedBorderAtlas()
-    local selected = ComboPointCounterDB.borderAtlas
-    if CPC.GetBorderAtlas then
-        selected = CPC.GetBorderAtlas()
-    end
-    if not BORDER_ATLAS_LOOKUP[selected] then
-        selected = DEFAULT_BORDER_ATLAS
-    end
-    return selected
-end
-
 local function UpdateBorderAtlasDropdownText()
-    local selected = GetSelectedBorderAtlas()
+    local selected = ComboPointCounterDB.borderAtlas
     UIDropDownMenu_SetText(borderAtlasDropdown, BORDER_ATLAS_LABELS[selected] or selected)
 end
 
-local function IsBorderTintAtlasSelected()
-    return GetSelectedBorderAtlas() == BORDER_TINT_ATLAS
-end
-
 local function UpdateBorderTintVisibility()
-    if not borderTintRow then
-        return
-    end
-
-    borderTintRow:SetShown(IsBorderTintAtlasSelected())
-    if UpdateContentHeight then
-        UpdateContentHeight()
-    end
+    borderTintRow:SetShown(ComboPointCounterDB.borderAtlas == CPC.BORDER_TINT_ATLAS)
+    UpdateContentHeight()
 end
 
 local function InitializeBorderAtlasDropdown()
@@ -529,18 +435,12 @@ local function InitializeBorderAtlasDropdown()
             return
         end
 
-        local selected = GetSelectedBorderAtlas()
-        for _, atlas in ipairs(BORDER_ATLAS_CHOICES) do
+        local selected = ComboPointCounterDB.borderAtlas
+        for _, atlas in ipairs(CPC.BORDER_ATLAS_CHOICES) do
             local info = UIDropDownMenu_CreateInfo()
             info.text = BORDER_ATLAS_LABELS[atlas] or atlas
             info.func = function()
-                if CPC.SetBorderAtlas then
-                    CPC.SetBorderAtlas(atlas)
-                else
-                    ComboPointCounterDB.borderAtlas = atlas
-                end
-                UpdateBorderAtlasDropdownText()
-                UpdateBorderTintVisibility()
+                CPC.SetBorderAtlas(atlas)
             end
             info.checked = (atlas == selected)
             UIDropDownMenu_AddButton(info, level)
@@ -549,67 +449,6 @@ local function InitializeBorderAtlasDropdown()
 
     borderAtlasDropdownInitialized = true
 end
-
-defaultColorRow, defaultColorButton = CreateColorRow("Background Tint", thresholdSlider, -18, function()
-    local r, g, b, a = CPC.GetBackgroundColor()
-    ShowColorPicker(r, g, b, a, function(nr, ng, nb, na)
-        CPC.SetBackgroundColor(nr, ng, nb, na)
-        defaultColorButton.swatch:SetColorTexture(nr, ng, nb, na)
-    end)
-end, function()
-    local c = DEFAULT_BG_COLOR
-    CPC.SetBackgroundColor(c.r, c.g, c.b, c.a)
-    defaultColorButton.swatch:SetColorTexture(c.r, c.g, c.b, c.a)
-end)
-
-finisherColorRow, finisherColorButton = CreateColorRow("Finisher Background Tint", defaultColorRow, -6, function()
-    local r, g, b, a = CPC.GetFinisherColor()
-    ShowColorPicker(r, g, b, a, function(nr, ng, nb, na)
-        CPC.SetFinisherColor(nr, ng, nb, na)
-        finisherColorButton.swatch:SetColorTexture(nr, ng, nb, na)
-    end)
-end, function()
-    local c = DEFAULT_FINISHER_COLOR
-    CPC.SetFinisherColor(c.r, c.g, c.b, c.a)
-    finisherColorButton.swatch:SetColorTexture(c.r, c.g, c.b, c.a)
-end)
-
-numberColorRow, numberColorButton = CreateColorRow("Number Tint", finisherColorRow, -6, function()
-    local r, g, b, a = CPC.GetNumberColor()
-    ShowColorPicker(r, g, b, a, function(nr, ng, nb, na)
-        CPC.SetNumberColor(nr, ng, nb, na)
-        numberColorButton.swatch:SetColorTexture(nr, ng, nb, na)
-    end)
-end, function()
-    local c = DEFAULT_NUMBER_COLOR
-    CPC.SetNumberColor(c.r, c.g, c.b, c.a)
-    numberColorButton.swatch:SetColorTexture(c.r, c.g, c.b, c.a)
-end)
-
-finisherNumberColorRow, finisherNumberColorButton = CreateColorRow("Finisher Number Tint", numberColorRow, -6, function()
-    local r, g, b, a = CPC.GetFinisherNumberColor()
-    ShowColorPicker(r, g, b, a, function(nr, ng, nb, na)
-        CPC.SetFinisherNumberColor(nr, ng, nb, na)
-        finisherNumberColorButton.swatch:SetColorTexture(nr, ng, nb, na)
-    end)
-end, function()
-    local c = DEFAULT_FINISHER_NUMBER_COLOR
-    CPC.SetFinisherNumberColor(c.r, c.g, c.b, c.a)
-    finisherNumberColorButton.swatch:SetColorTexture(c.r, c.g, c.b, c.a)
-end)
-
-borderTintRow, borderTintButton = CreateColorRow("Border Tint", finisherNumberColorRow, -6, function()
-    local r, g, b, a = CPC.GetBorderTint()
-    ShowColorPicker(r, g, b, a, function(nr, ng, nb, na)
-        CPC.SetBorderTint(nr, ng, nb, na)
-        borderTintButton.swatch:SetColorTexture(nr, ng, nb, na)
-    end)
-end, function()
-    local c = DEFAULT_BORDER_TINT
-    CPC.SetBorderTint(c.r, c.g, c.b, c.a)
-    borderTintButton.swatch:SetColorTexture(c.r, c.g, c.b, c.a)
-end)
-borderTintRow:Hide()
 
 --========================================================--
 -- Debug / Force Number Controls
@@ -716,67 +555,47 @@ end
 -- Unified Refresh
 --========================================================--
 UpdateContentHeight = function()
-    local lastOffsetRow = offsetBoxes[7]
-    if not lastOffsetRow then return end
-
+    local lastColorRow = borderTintRow:IsShown() and borderTintRow or colorRows.finisherNumberColor
     local top = content:GetTop()
-    local offsetBottom = lastOffsetRow:GetBottom()
-    local colorBottom = finisherNumberColorRow and finisherNumberColorRow:GetBottom() or nil
-    local borderTintBottom = (borderTintRow and borderTintRow:IsShown()) and borderTintRow:GetBottom() or nil
-    if not top or not offsetBottom then return end
+    local offsetBottom = offsetBoxes[7]:GetBottom()
+    local colorBottom = lastColorRow:GetBottom()
+    if not top or not offsetBottom or not colorBottom then return end
 
-    local bottom = offsetBottom
-    if colorBottom and colorBottom < bottom then
-        bottom = colorBottom
-    end
-    if borderTintBottom and borderTintBottom < bottom then
-        bottom = borderTintBottom
-    end
-
-    local height = top - bottom + 20
-    if height < 1 then
-        height = 1
-    end
-    content:SetHeight(height)
+    local height = top - math.min(offsetBottom, colorBottom) + 20
+    content:SetHeight(math.max(height, 1))
 end
 
 function CPC.RefreshAllOptions()
+    local db = ComboPointCounterDB
     refreshing = true
-    alwaysShow:SetChecked(ComboPointCounterDB.alwaysShow)
 
-    sizeSlider:SetValue(ComboPointCounterDB.size)
-    sizeBox:SetText(tostring(ComboPointCounterDB.size))
+    alwaysShow:SetChecked(db.alwaysShow)
 
-    posX:SetText(ComboPointCounterDB.x or 0)
-    posY:SetText(ComboPointCounterDB.y or 0)
+    sizeSlider:SetValue(db.size)
+    sizeBox:SetText(tostring(db.size))
 
-    local br, bg, bb, ba = CPC.GetBackgroundColor()
-    defaultColorButton.swatch:SetColorTexture(br, bg, bb, ba)
+    posX:SetText(db.x)
+    posY:SetText(db.y)
 
-    local fr, fg, fb, fa = CPC.GetFinisherColor()
-    finisherColorButton.swatch:SetColorTexture(fr, fg, fb, fa)
-    local nr, ng, nb, na = CPC.GetNumberColor()
-    numberColorButton.swatch:SetColorTexture(nr, ng, nb, na)
-    local fnr, fng, fnb, fna = CPC.GetFinisherNumberColor()
-    finisherNumberColorButton.swatch:SetColorTexture(fnr, fng, fnb, fna)
-    local tr, tg, tb, ta = CPC.GetBorderTint()
-    borderTintButton.swatch:SetColorTexture(tr, tg, tb, ta)
+    for key, button in pairs(colorButtons) do
+        button.swatch:SetColorTexture(CPC.GetColor(key))
+    end
     InitializeBorderAtlasDropdown()
     UpdateBorderAtlasDropdownText()
     UpdateBorderTintVisibility()
 
-    local threshold = CPC.GetFinisherThreshold and CPC.GetFinisherThreshold() or ComboPointCounterDB.finisherThreshold or DEFAULT_FINISHER_THRESHOLD
-    thresholdSlider:SetValue(threshold)
-    thresholdBox:SetText(tostring(threshold))
+    thresholdSlider:SetValue(db.finisherThreshold)
+    thresholdBox:SetText(tostring(db.finisherThreshold))
 
-    local debugEnabled = ComboPointCounterDB.debugValue ~= nil
+    local debugEnabled = db.debugValue ~= nil
     debugCheck:SetChecked(debugEnabled)
-    debugBox:SetText(ComboPointCounterDB.debugValue or "")
+    debugBox:SetText(db.debugValue or "")
     SetDebugBoxEnabled(debugEnabled)
 
     for i = 0, 7 do
-        offsetBoxes[i].box:SetText(ComboPointCounterDB.textOffsets[i] or 0)
+        offsetBoxes[i].box:SetText(db.textOffsets[i])
     end
+
     refreshing = false
 end
 

@@ -117,7 +117,6 @@ local function SanitizeIntegerText(text, allowNegative)
 end
 
 local function SetIntegerInputFilter(box, allowNegative)
-    box:SetNumeric(false)
     box:SetScript("OnTextChanged", function(self, userInput)
         if not userInput then
             return
@@ -245,13 +244,36 @@ local function CreateResetButton(row, anchor, xOffset, onClick)
     return reset
 end
 
-local function CreateInputBox(parent, width, allowNegative)
+-- Edits are committed when the box loses focus (Enter, Tab or clicking away) and
+-- undone by Escape. Either way the refresh then shows the saved value again.
+local function CreateInputBox(parent, width, allowNegative, commit)
     local box = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
     box:SetSize(width, 20)
     box:SetAutoFocus(false)
     SetIntegerInputFilter(box, allowNegative)
     RegisterTabBox(box)
+
+    box:SetScript("OnEnterPressed", box.ClearFocus)
+    box:SetScript("OnEscapePressed", function(self)
+        self.cancelled = true
+        self:ClearFocus()
+    end)
+    box:HookScript("OnEditFocusLost", function(self)
+        if self.cancelled then
+            self.cancelled = nil
+        else
+            commit(self)
+        end
+        CPC.NotifyOptions()
+    end)
     return box
+end
+
+-- A box being typed in is left alone so a refresh doesn't wipe the edit
+local function SetBoxText(box, value)
+    if not box:HasFocus() then
+        box:SetText(value)
+    end
 end
 
 local function ShowColorPicker(r, g, b, a, onChange)
@@ -326,15 +348,7 @@ local posXLabel = posRow:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
 PlaceControl(posRow, posXLabel)
 posXLabel:SetText("X")
 
-local posX = CreateInputBox(posRow, 55, true)
-posX:SetPoint("LEFT", posXLabel, "RIGHT", 10, 0)
-
-local posYLabel = posRow:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-posYLabel:SetPoint("LEFT", posX, "RIGHT", 10, 0)
-posYLabel:SetText("Y")
-
-local posY = CreateInputBox(posRow, 55, true)
-posY:SetPoint("LEFT", posYLabel, "RIGHT", 10, 0)
+local posX, posY
 
 local function ApplyPosition()
     local x = ParseInteger(posX:GetText())
@@ -344,8 +358,15 @@ local function ApplyPosition()
     end
 end
 
-posX:SetScript("OnEnterPressed", function(self) ApplyPosition(); self:ClearFocus() end)
-posY:SetScript("OnEnterPressed", function(self) ApplyPosition(); self:ClearFocus() end)
+posX = CreateInputBox(posRow, 55, true, ApplyPosition)
+posX:SetPoint("LEFT", posXLabel, "RIGHT", 10, 0)
+
+local posYLabel = posRow:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+posYLabel:SetPoint("LEFT", posX, "RIGHT", 10, 0)
+posYLabel:SetText("Y")
+
+posY = CreateInputBox(posRow, 55, true, ApplyPosition)
+posY:SetPoint("LEFT", posYLabel, "RIGHT", 10, 0)
 
 local applyPos = CreateFrame("Button", nil, posRow, "UIPanelButtonTemplate")
 applyPos:SetSize(RESET_WIDTH, 22)
@@ -362,15 +383,6 @@ end)
 --========================================================--
 AddSection("Appearance")
 
-local BORDER_ATLAS_LABELS = {
-    ["ChallengeMode-KeystoneSlotFrameGlow"] = "Glow 1",
-    ["ChallengeMode-KeystoneSlotFrame"] = "Ornate",
-    ["lemixArtifact-node-circle-glw-FX"] = "Glow 2",
-    ["dragonflight-landingbutton-circlehighlight"] = "Container",
-    ["services-cover-ring"] = "Ring",
-    ["talents-node-circle-sheenmask"] = "Solid Color",
-}
-
 -- Same dropdown-with-arrows control the Blizzard settings list uses
 local borderRow = AddRow("Border")
 local borderControl = CreateFrame("Frame", nil, borderRow, "SettingsDropdownWithButtonsTemplate")
@@ -383,24 +395,19 @@ local function IsBorderSelected(atlas)
 end
 
 borderDropdown:SetupMenu(function(_, rootDescription)
-    for _, atlas in ipairs(CPC.BORDER_ATLAS_CHOICES) do
-        rootDescription:CreateRadio(BORDER_ATLAS_LABELS[atlas] or atlas, IsBorderSelected, CPC.SetBorderAtlas, atlas)
+    for _, info in ipairs(CPC.BORDERS) do
+        rootDescription:CreateRadio(info.label, IsBorderSelected, CPC.SetBorderAtlas, info.atlas)
     end
 end)
 
 local function GetBorderIndex()
-    for i, atlas in ipairs(CPC.BORDER_ATLAS_CHOICES) do
-        if atlas == ComboPointCounterDB.borderAtlas then
-            return i
-        end
-    end
-    return 1
+    return CPC.BORDER_BY_ATLAS[ComboPointCounterDB.borderAtlas].index
 end
 
 local function StepBorder(delta)
-    local atlas = CPC.BORDER_ATLAS_CHOICES[GetBorderIndex() + delta]
-    if atlas then
-        CPC.SetBorderAtlas(atlas)
+    local info = CPC.BORDERS[GetBorderIndex() + delta]
+    if info then
+        CPC.SetBorderAtlas(info.atlas)
     end
 end
 
@@ -416,7 +423,7 @@ local function UpdateBorderControl()
     local index = GetBorderIndex()
     borderDropdown:GenerateMenu()
     borderControl.DecrementButton:SetEnabled(index > 1)
-    borderControl.IncrementButton:SetEnabled(index < #CPC.BORDER_ATLAS_CHOICES)
+    borderControl.IncrementButton:SetEnabled(index < #CPC.BORDERS)
 end
 
 local thresholdRow = AddRow("Finisher Threshold")
@@ -475,9 +482,13 @@ local debugRow = AddRow("Force Number", COMPACT_ROW_HEIGHT)
 local debugCheck = CreateCheckbox(debugRow)
 PlaceControl(debugRow, debugCheck)
 
-local debugBox = CreateInputBox(debugRow, 40, false)
+local debugBox = CreateInputBox(debugRow, 40, false, function(self)
+    local v = ParseInteger(self:GetText())
+    if v then
+        CPC.SetDebugValue(math.max(0, math.min(7, v)))
+    end
+end)
 debugBox:SetPoint("LEFT", debugCheck, "RIGHT", 10, 0)
-debugBox:EnableMouseWheel(false)
 
 debugBox:SetScript("OnEditFocusGained", function(self)
     self:HighlightText()
@@ -502,30 +513,18 @@ debugCheck:SetScript("OnClick", function(self)
     end
 end)
 
-debugBox:SetScript("OnEnterPressed", function(self)
-    local v = ParseInteger(self:GetText())
-    if v then
-        v = math.max(0, math.min(7, v))
-        CPC.SetDebugValue(v)
-        self:SetText(v)
-    end
-    self:ClearFocus()
-end)
-
 local offsetBoxes = {}
 
 for i = 0, 7 do
     local row = AddRow("Offset " .. i, COMPACT_ROW_HEIGHT)
-    local box = CreateInputBox(row, 40, true)
+    local box = CreateInputBox(row, 40, true, function(self)
+        local v = ParseInteger(self:GetText())
+        if v then
+            CPC.SetTextOffset(i, v)
+        end
+    end)
     -- InputBoxTemplate art extends left of the frame, so nudge it to line up with the other controls
     box:SetPoint("LEFT", row, "CENTER", CONTROL_OFFSET + 6, 0)
-
-    box:SetScript("OnEnterPressed", function(self)
-        local v = ParseInteger(self:GetText()) or 0
-        CPC.SetTextOffset(i, v)
-        self:SetText(v)
-        self:ClearFocus()
-    end)
 
     offsetBoxes[i] = box
 end
@@ -543,8 +542,8 @@ function CPC.RefreshAllOptions()
 
     sizeSlider:SetValue(db.size)
 
-    posX:SetText(db.x)
-    posY:SetText(db.y)
+    SetBoxText(posX, db.x)
+    SetBoxText(posY, db.y)
 
     for key, button in pairs(colorButtons) do
         button.swatch:SetColorTexture(CPC.GetColor(key))
@@ -554,13 +553,14 @@ function CPC.RefreshAllOptions()
 
     thresholdSlider:SetValue(db.finisherThreshold)
 
-    local debugEnabled = db.debugValue ~= nil
+    -- Force Number stays on while its first value is still being typed
+    local debugEnabled = db.debugValue ~= nil or debugBox:HasFocus()
     debugCheck:SetChecked(debugEnabled)
-    debugBox:SetText(db.debugValue or "")
+    SetBoxText(debugBox, db.debugValue or "")
     SetDebugBoxEnabled(debugEnabled)
 
     for i = 0, 7 do
-        offsetBoxes[i]:SetText(db.textOffsets[i])
+        SetBoxText(offsetBoxes[i], db.textOffsets[i])
     end
 
     refreshing = false

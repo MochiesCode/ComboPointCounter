@@ -22,7 +22,7 @@ end
 local function approx(a, b) return math.abs(a - b) < 1e-6 end
 
 -- Strict globals: reading an undefined global is an error (catches typos / removed APIs)
-local ALLOWED_NIL = { ComboPointCounterDB = true, InterfaceOptionsFrame_OpenToCategory = true }
+local ALLOWED_NIL = { ComboPointCounterDB = true }
 setmetatable(_G, { __index = function(_, k)
     if ALLOWED_NIL[k] then return nil end
     error("read of undefined global '" .. tostring(k) .. "'", 2)
@@ -78,6 +78,20 @@ function Widget:GetText() return self.text end
 function Widget:SetChecked(c) self.checked = not not c end
 function Widget:GetChecked() return self.checked end
 function Widget:GetCursorPosition() return #self.text end
+function Widget:EnableMouse(e) self.mouse = e end
+-- EditBox focus: one box at a time, with the old box losing focus first
+function Widget:HasFocus() return state.focus == self end
+function Widget:SetFocus()
+    if state.focus == self then return end
+    if state.focus then state.focus:ClearFocus() end
+    state.focus = self
+    self:Fire("OnEditFocusGained")
+end
+function Widget:ClearFocus()
+    if state.focus ~= self then return end
+    state.focus = nil
+    self:Fire("OnEditFocusLost")
+end
 function Widget:SetMinMaxValues(a, b) self.min, self.max = a, b end
 function Widget:SetValue(v)
     local inner = rawget(self, "Slider")
@@ -120,7 +134,7 @@ end
 local function Boot(class, db, opts)
     opts = opts or {}
     state = { widgets = {}, timers = {}, prints = {}, opened = {}, combat = false, lockdown = false,
-        power = opts.power or 0, formID = opts.formID }
+        power = opts.power or 0, maxPower = opts.maxPower or 7, formID = opts.formID }
 
     rawset(_G, "ComboPointCounterDB", db)
     rawset(_G, "SlashCmdList", {})
@@ -131,10 +145,11 @@ local function Boot(class, db, opts)
     rawset(_G, "CAT_FORM", 1)
     rawset(_G, "GetShapeshiftFormID", function() return state.formID end)
     rawset(_G, "UnitPower", function(unit, pt) assert(unit == "player" and pt == 4); return state.power end)
+    rawset(_G, "UnitPowerMax", function(unit, pt) assert(unit == "player" and pt == 4); return state.maxPower end)
     rawset(_G, "Enum", { PowerType = { ComboPoints = 4 } })
     rawset(_G, "UnitAffectingCombat", function() return state.combat end)
     rawset(_G, "InCombatLockdown", function() return state.lockdown end)
-    rawset(_G, "IsShiftKeyDown", function() return false end)
+    rawset(_G, "IsShiftKeyDown", function() return state.shift end)
     rawset(_G, "C_Timer", { After = function(_, fn) state.timers[#state.timers + 1] = fn end })
     rawset(_G, "C_AddOns", { GetAddOnMetadata = function(name, field) assert(name == "ComboPointCounter" and field == "Version"); return "1.3" end })
     rawset(_G, "Settings", {
@@ -250,6 +265,26 @@ Test("Existing saved variables are preserved", function()
     check(CPC.frame.shown, "alwaysShow respected on load")
 end)
 
+Test("Force Number does not survive a reload", function()
+    Boot("ROGUE", { debugValue = 3 })
+    check(ComboPointCounterDB.debugValue == nil, "debugValue cleared on load")
+end)
+
+Test("Finisher threshold above max combo points still triggers at max", function()
+    local CPC = Boot("DRUID", nil, { formID = 1, maxPower = 5 })
+    local f = CPC.frame
+    local fill = Find(function(w) return w.kind == "Texture" and w.parent == f end)
+    state.combat = true
+    state.power = 4
+    FireEvent(f, "PLAYER_REGEN_DISABLED")
+    RunTimers()
+    check(approx(fill.color[4], 0.6), "4 of 5 points: normal background")
+    state.power = 5
+    FireEvent(f, "UNIT_POWER_UPDATE", "player", "COMBO_POINTS")
+    RunTimers()
+    check(approx(fill.color[1], 0.75), "5 of 5 points with threshold 6: finisher background")
+end)
+
 Test("Druid: only shown in cat form", function()
     local CPC = Boot("DRUID", nil)
     local f = CPC.frame
@@ -341,9 +376,70 @@ Test("Options panel: refresh, out-of-range size not clobbered, controls", functi
     -- force number checkbox + box
     local debugBox
     for _, w in ipairs(state.widgets) do if w.kind == "EditBox" and w.scripts.OnEditFocusGained then debugBox = w end end
+    debugBox:SetFocus()
     debugBox.text = "9"
     debugBox:Fire("OnEnterPressed")
-    check(db.debugValue == 7, "force number clamps to 7")
+    check(db.debugValue == 7 and debugBox.text == "7", "force number clamps to 7")
+end)
+
+Test("Options typing: refresh keeps the edit, focus loss commits, Escape undoes", function()
+    local CPC = Boot("ROGUE", nil)
+    CPC.OptionsPanel:Fire("OnShow")
+    local db = ComboPointCounterDB
+    local boxes = {}
+    for _, w in ipairs(state.widgets) do if w.kind == "EditBox" then boxes[#boxes + 1] = w end end
+    local posX, posY, offset0 = boxes[1], boxes[2], boxes[4]
+    local sizeSlider = Find(function(w) return w.kind == "Slider" and w.max == 128 end)
+
+    posX:SetFocus()
+    posX.text = "123"
+    sizeSlider:SetValue(40)
+    check(db.size == 40 and posX.text == "123", "slider refresh leaves the box being typed in alone")
+    posX:Fire("OnEnterPressed")
+    check(db.x == 123 and not posX:HasFocus(), "Enter commits")
+
+    posX:SetFocus()
+    posX.text = "7"
+    posX:Fire("OnTabPressed")
+    check(db.x == 7 and posY:HasFocus(), "Tab commits and moves to the next box")
+
+    posY.text = "50"
+    posY:Fire("OnEscapePressed")
+    check(db.y == 0 and posY.text == "0", "Escape undoes the edit")
+
+    offset0:SetFocus()
+    offset0.text = "-"
+    offset0:Fire("OnEnterPressed")
+    check(db.textOffsets[0] == 0 and offset0.text == "0", "invalid text reverts to the saved value")
+end)
+
+Test("Mouse is only taken while Shift is held", function()
+    local CPC = Boot("ROGUE", nil)
+    local f = CPC.frame
+    check(not f.mouse, "no mouse by default")
+    state.shift = true
+    FireEvent(f, "MODIFIER_STATE_CHANGED", "LSHIFT", 1)
+    check(f.mouse, "Shift down takes the mouse")
+    state.shift = false
+    FireEvent(f, "MODIFIER_STATE_CHANGED", "LSHIFT", 0)
+    check(not f.mouse, "Shift up releases it")
+
+    state.shift = true
+    FireEvent(f, "MODIFIER_STATE_CHANGED", "LSHIFT", 1)
+    f:Fire("OnDragStart")
+    state.shift = false
+    FireEvent(f, "MODIFIER_STATE_CHANGED", "LSHIFT", 0)
+    check(f.mouse, "mouse kept mid-drag after Shift is let go")
+    f.lastPoint = { "CENTER", UIParent, "CENTER", 10.4, -5.6 }
+    f:Fire("OnDragStop")
+    check(not f.mouse and ComboPointCounterDB.x == 10 and ComboPointCounterDB.y == -6, "drag end saves position and releases the mouse")
+
+    state.shift = true
+    f:Fire("OnDragStart")
+    state.shift = false
+    f:Hide()
+    f:Fire("OnHide")
+    check(not f.mouse, "hiding mid-drag ends the drag")
 end)
 
 Test("Slash command: opens options, defers in combat", function()

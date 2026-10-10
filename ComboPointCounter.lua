@@ -5,42 +5,27 @@ if class ~= "ROGUE" and class ~= "DRUID" then return end
 -- Namespace
 local addonName, CPC = ...
 
-local BORDER_ATLAS_CHOICES = {
-    "ChallengeMode-KeystoneSlotFrameGlow",
-    "lemixArtifact-node-circle-glw-FX",
-    "ChallengeMode-KeystoneSlotFrame",
-    "dragonflight-landingbutton-circlehighlight",
-    "services-cover-ring",
-    "talents-node-circle-sheenmask",
+-- Border choices in menu order. scale/x/y adjust atlases whose art isn't sized or centered like the rest.
+local BORDERS = {
+    { atlas = "ChallengeMode-KeystoneSlotFrameGlow", label = "Glow 1" },
+    { atlas = "lemixArtifact-node-circle-glw-FX", label = "Glow 2" },
+    { atlas = "ChallengeMode-KeystoneSlotFrame", label = "Ornate" },
+    { atlas = "dragonflight-landingbutton-circlehighlight", label = "Container", scale = 0.63, x = -0.5, y = -0.5 },
+    { atlas = "services-cover-ring", label = "Ring", scale = 0.63, x = -0.5, y = -0.6 },
+    { atlas = "talents-node-circle-sheenmask", label = "Solid Color", scale = 0.84 },
 }
 
-local BORDER_ATLAS_LOOKUP = {}
-for _, atlas in ipairs(BORDER_ATLAS_CHOICES) do
-    BORDER_ATLAS_LOOKUP[atlas] = true
+local BORDER_BY_ATLAS = {}
+for i, info in ipairs(BORDERS) do
+    info.index = i
+    BORDER_BY_ATLAS[info.atlas] = info
 end
 
-local DEFAULT_BORDER_ATLAS = BORDER_ATLAS_CHOICES[1]
+local DEFAULT_BORDER_ATLAS = BORDERS[1].atlas
 local BORDER_TINT_ATLAS = "talents-node-circle-sheenmask"
-CPC.BORDER_ATLAS_CHOICES = BORDER_ATLAS_CHOICES
-CPC.BORDER_ATLAS_LOOKUP = BORDER_ATLAS_LOOKUP
+CPC.BORDERS = BORDERS
+CPC.BORDER_BY_ATLAS = BORDER_BY_ATLAS
 CPC.BORDER_TINT_ATLAS = BORDER_TINT_ATLAS
-
-local SMALL_BORDER_SCALE = 0.6
-local SLIGHTLY_LARGER_SMALL_SCALE = SMALL_BORDER_SCALE * 1.05
-local TINT_BORDER_SCALE = 0.84
-local BORDER_SIZE_SCALE_BY_ATLAS = {
-    ["dragonflight-landingbutton-circlehighlight"] = SLIGHTLY_LARGER_SMALL_SCALE,
-    ["services-cover-ring"] = SLIGHTLY_LARGER_SMALL_SCALE,
-    ["talents-node-circle-sheenmask"] = TINT_BORDER_SCALE,
-}
-local BORDER_Y_OFFSET_BY_ATLAS = {
-    ["dragonflight-landingbutton-circlehighlight"] = -0.5,
-    ["services-cover-ring"] = -0.6,
-}
-local BORDER_X_OFFSET_BY_ATLAS = {
-    ["dragonflight-landingbutton-circlehighlight"] = -0.5,
-    ["services-cover-ring"] = -0.5,
-}
 
 local BASE_FONT, BASE_FONT_SIZE, BASE_FONT_FLAGS = GameFontNormalLarge:GetFont()
 local CAT_FORM_ID = CAT_FORM or 1
@@ -81,9 +66,11 @@ end
 
 ComboPointCounterDB = ComboPointCounterDB or {}
 ApplyDefaults(ComboPointCounterDB, DEFAULTS)
-if not BORDER_ATLAS_LOOKUP[ComboPointCounterDB.borderAtlas] then
+if not BORDER_BY_ATLAS[ComboPointCounterDB.borderAtlas] then
     ComboPointCounterDB.borderAtlas = DEFAULT_BORDER_ATLAS
 end
+-- Force Number is only a preview, so it never survives a reload
+ComboPointCounterDB.debugValue = nil
 
 --========================================================--
 -- Options Sync
@@ -107,24 +94,43 @@ frame:SetPoint(
 )
 frame:SetSize(ComboPointCounterDB.size, ComboPointCounterDB.size)
 frame:SetMovable(true)
-frame:EnableMouse(true)
 frame:RegisterForDrag("LeftButton")
 CPC.frame = frame
 
 --========================================================--
 -- Drag Handling
 --========================================================--
+-- The frame only takes the mouse while Shift is held, so it never blocks clicks on the world.
+-- A drag keeps the mouse until it ends, even if Shift is let go first.
+local dragging = false
+
+local function UpdateMouse()
+    frame:EnableMouse(dragging or IsShiftKeyDown())
+end
+
+local function StopDrag(self)
+    self:StopMovingOrSizing()
+    dragging = false
+    UpdateMouse()
+
+    local _, _, _, x, y = self:GetPoint()
+    CPC.SetFramePosition(math.floor(x + 0.5), math.floor(y + 0.5))
+end
+
 frame:SetScript("OnDragStart", function(self)
     if IsShiftKeyDown() then
+        dragging = true
         self:StartMoving()
     end
 end)
 
-frame:SetScript("OnDragStop", function(self)
-    self:StopMovingOrSizing()
+frame:SetScript("OnDragStop", StopDrag)
 
-    local _, _, _, x, y = self:GetPoint()
-    CPC.SetFramePosition(math.floor(x + 0.5), math.floor(y + 0.5))
+-- Combat can end mid-drag and hide the frame
+frame:SetScript("OnHide", function(self)
+    if dragging then
+        StopDrag(self)
+    end
 end)
 
 --========================================================--
@@ -132,7 +138,6 @@ end)
 --========================================================--
 local fill = frame:CreateTexture(nil, "BACKGROUND")
 fill:SetAllPoints()
-fill:SetColorTexture(0, 0, 0, 0.6)
 
 local mask = frame:CreateMaskTexture()
 mask:SetTexture("Interface/CharacterFrame/TempPortraitAlphaMask")
@@ -140,8 +145,6 @@ mask:SetAllPoints(fill)
 fill:AddMaskTexture(mask)
 
 local border = frame:CreateTexture(nil, "BORDER")
-border:SetPoint("CENTER")
-border:SetAtlas(ComboPointCounterDB.borderAtlas)
 border:SetSnapToPixelGrid(false)
 border:SetTexelSnappingBias(0)
 
@@ -149,26 +152,18 @@ border:SetTexelSnappingBias(0)
 -- Counter Text
 --========================================================--
 local text = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-local BASE_FRAME_SIZE = 25
 text:SetShadowOffset(1.5, -1.5)
 text:SetShadowColor(0, 0, 0, 0.8)
 
 --========================================================--
 -- Core Update Functions
 --========================================================--
-local function ClampChannel(value, fallback)
-    value = tonumber(value)
-    if not value then
-        return fallback
-    end
-    if value < 0 then return 0 end
-    if value > 1 then return 1 end
-    return value
-end
-
 local function ApplyColors(comboPoint)
     local db = ComboPointCounterDB
-    local isFinisher = comboPoint >= db.finisherThreshold
+    -- Never ask for more points than the player can hold (druids and untalented rogues cap at 5)
+    local maxPoints = UnitPowerMax("player", Enum.PowerType.ComboPoints)
+    local threshold = math.max(1, math.min(db.finisherThreshold, maxPoints))
+    local isFinisher = comboPoint >= threshold
     local fillColor = isFinisher and db.finisherColor or db.backgroundColor
     local numberColor = isFinisher and db.finisherNumberColor or db.numberColor
     fill:SetColorTexture(fillColor.r, fillColor.g, fillColor.b, fillColor.a)
@@ -218,14 +213,13 @@ end
 CPC.UpdateVisibility = UpdateVisibility
 
 local function UpdateFontSize()
-    local scale = ComboPointCounterDB.size / BASE_FRAME_SIZE
+    local scale = ComboPointCounterDB.size / DEFAULTS.size
     local fontSize = math.floor(BASE_FONT_SIZE * scale + 0.5)
     text:SetFont(BASE_FONT, fontSize, BASE_FONT_FLAGS)
 end
 
 local function UpdateBorderSize()
-    local atlas = ComboPointCounterDB.borderAtlas
-    local sizeScale = BORDER_SIZE_SCALE_BY_ATLAS[atlas] or 1
+    local sizeScale = BORDER_BY_ATLAS[ComboPointCounterDB.borderAtlas].scale or 1
     local borderSize = ComboPointCounterDB.size * 2 * sizeScale
 
     borderSize = math.floor(borderSize + 0.5)
@@ -248,17 +242,11 @@ local function ApplyBorderTint()
 end
 
 local function ApplyBorderAtlas()
-    local atlas = ComboPointCounterDB.borderAtlas
+    local info = BORDER_BY_ATLAS[ComboPointCounterDB.borderAtlas]
 
     border:ClearAllPoints()
-    border:SetPoint(
-        "CENTER",
-        frame,
-        "CENTER",
-        BORDER_X_OFFSET_BY_ATLAS[atlas] or 0,
-        BORDER_Y_OFFSET_BY_ATLAS[atlas] or 0
-    )
-    border:SetAtlas(atlas)
+    border:SetPoint("CENTER", frame, "CENTER", info.x or 0, info.y or 0)
+    border:SetAtlas(info.atlas)
     UpdateBorderSize()
     ApplyBorderTint()
 end
@@ -311,20 +299,15 @@ function CPC.SetFinisherThreshold(value)
     CPC.NotifyOptions()
 end
 
--- Colors that need something other than UpdateCounter to redraw
-local COLOR_APPLIERS = {
-    borderTint = ApplyBorderTint,
-}
-
 -- key is one of the color tables in DEFAULTS (backgroundColor, borderTint, ...)
 function CPC.SetColor(key, r, g, b, a)
     local c = ComboPointCounterDB[key]
-    c.r = ClampChannel(r, c.r)
-    c.g = ClampChannel(g, c.g)
-    c.b = ClampChannel(b, c.b)
-    c.a = ClampChannel(a, c.a)
-    local apply = COLOR_APPLIERS[key] or UpdateCounter
-    apply()
+    c.r, c.g, c.b, c.a = r, g, b, a
+    if key == "borderTint" then
+        ApplyBorderTint()
+    else
+        UpdateCounter()
+    end
     CPC.NotifyOptions()
 end
 
@@ -334,7 +317,7 @@ function CPC.GetColor(key)
 end
 
 function CPC.SetBorderAtlas(atlas)
-    if not BORDER_ATLAS_LOOKUP[atlas] then
+    if not BORDER_BY_ATLAS[atlas] then
         return
     end
 
@@ -352,6 +335,8 @@ local function HandleEvent(self, event, unit, powerType)
         if powerType == "COMBO_POINTS" and frame:IsShown() then
             UpdateCounter()
         end
+    elseif event == "MODIFIER_STATE_CHANGED" then
+        UpdateMouse()
     else
         UpdateVisibility()
     end
@@ -361,6 +346,7 @@ frame:RegisterEvent("PLAYER_REGEN_DISABLED")
 frame:RegisterEvent("PLAYER_REGEN_ENABLED")
 frame:RegisterUnitEvent("UNIT_POWER_UPDATE", "player")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+frame:RegisterEvent("MODIFIER_STATE_CHANGED")
 if class == "DRUID" then
     frame:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
 end

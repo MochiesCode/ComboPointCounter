@@ -2,7 +2,7 @@
 ## Title: Combo Point Counter
 ## Notes: Displays the number of combo points you have
 ## Author: Mochie
-## Version: 1.4
+## Version: 1.4.1
 ## IconTexture: Interface\AddOns\ComboPointCounter\Icon
 ## SavedVariablesPerCharacter: ComboPointCounterDB
 ## LoadSavedVariablesFirst: 1
